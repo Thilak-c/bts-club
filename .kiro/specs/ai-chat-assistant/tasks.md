@@ -1,0 +1,134 @@
+# Implementation Plan
+
+- [x] 1. Set up Convex schema and mutations for staff calls and zone requests
+  - [x] 1.1 Add staffCalls and zoneRequests tables to Convex schema
+    - Add staffCalls table with tableId, tableNumber, zoneName, reason, status, createdAt fields
+    - Add zoneRequests table with tableId, tableNumber, currentZone, requestedZone, status, createdAt fields
+    - Add indexes for status-based queries
+    - _Requirements: 5.1, 6.1_
+  - [x] 1.2 Create Convex mutations for staff calls
+    - Implement staffCalls.create mutation
+    - Implement staffCalls.list query for admin panel
+    - Implement staffCalls.updateStatus mutation
+    - _Requirements: 5.1, 5.2, 5.3_
+  - [x] 1.3 Create Convex mutations for zone requests
+    - Implement zoneRequests.create mutation
+    - Implement zoneRequests.list query for admin panel
+    - Implement zoneRequests.updateStatus mutation
+    - _Requirements: 6.1, 6.2_
+  - [x] 1.4 Add orders.getActiveByTable query
+    - Create query to fetch active order by tableId (not session)
+    - Return order details including items, total, and status
+    - _Requirements: 4.1, 4.2, 4.3_
+
+- [x] 2. Create Next.js API routes for chat functionality
+  - [x] 2.1 Create /api/chat route for AI interactions
+    - Set up OpenAI client configuration
+    - Build system prompt with table context, menu items, and order status
+    - Handle conversation history for context continuity
+    - Implement response streaming or standard completion
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 9.1, 9.2, 9.3_
+  - [x] 2.2 Create /api/staff-call route
+    - Validate request payload
+    - Call Convex mutation to create staff call
+    - Return confirmation response
+    - _Requirements: 5.1, 5.2, 5.3_
+  - [x] 2.3 Create /api/zone-request route
+    - Validate request payload
+    - Call Convex mutation to create zone request
+    - Return confirmation response
+    - _Requirements: 6.1, 6.2_
+
+- [x] 3. Build ChatProvider context and hooks
+  - [x] 3.1 Create ChatProvider context with state management
+    - Define ChatMessage, TableContext, and ChatContextValue types
+    - Implement messages state with add/clear functionality
+    - Implement isOpen, isLoading state
+    - Implement tableContext state initialization
+    - _Requirements: 1.1, 1.2, 1.3, 8.6_
+  - [x] 3.2 Implement sendMessage function
+    - Add user message to state
+    - Call /api/chat with message and context
+    - Add assistant response to state
+    - Handle loading states
+    - _Requirements: 2.1, 2.5, 8.6_
+  - [x] 3.3 Implement quick reply handlers
+    - Map QuickReplyAction to appropriate API calls or messages
+    - Handle call_staff action with /api/staff-call
+    - Handle request_vip action with /api/zone-request
+    - _Requirements: 5.1, 6.1, 8.3_
+  - [x] 3.4 Create useChat hook for consuming context
+    - Export hook for components to access chat state and actions
+    - _Requirements: 8.1_
+
+- [x] 4. Build chat UI components
+  - [x] 4.1 Create ChatButton floating action button
+    - Fixed position bottom-right with 56px size
+    - Orange accent color with chat icon
+    - onClick opens chat sheet
+    - _Requirements: 8.1, 8.2_
+  - [x] 4.2 Create ChatSheet bottom panel component
+    - Slide-up animation from bottom
+    - 70vh max height with rounded top corners
+    - Header with title and close button
+    - Context bar showing table and zone
+    - _Requirements: 8.1, 8.2, 8.4_
+  - [x] 4.3 Create ChatMessage component
+    - User messages: right-aligned, orange background
+    - Assistant messages: left-aligned, dark card background
+    - Timestamp display
+    - _Requirements: 8.2_
+  - [x] 4.4 Create QuickReplyButtons component
+    - Horizontal scrollable container
+    - Pill-shaped buttons with icons
+    - Implement all 5 quick reply options
+    - _Requirements: 8.3_
+  - [x] 4.5 Create ChatInput component
+    - Text input with send button
+    - Disable while loading
+    - Clear on send
+    - _Requirements: 8.5, 8.6_
+  - [x] 4.6 Create loading indicator for AI responses
+    - Typing indicator animation
+    - Display while waiting for response
+    - _Requirements: 8.6_
+
+- [x] 5. Integrate ChatAssistant into menu page
+  - [x] 5.1 Create ChatAssistant wrapper component
+    - Wrap ChatProvider around chat UI components
+    - Pass tableId from URL params
+    - Fetch table context on mount
+    - _Requirements: 1.1, 1.2, 1.3_
+  - [x] 5.2 Add ChatAssistant to menu page
+    - Import and render ChatAssistant in menu/[tableId]/page.js
+    - Position chat button above cart button
+    - _Requirements: 8.1_
+  - [x] 5.3 Implement welcome message on chat open
+    - Display greeting with table number and zone name
+    - Show quick reply buttons immediately
+    - _Requirements: 8.4_
+
+- [x] 6. Add error handling and edge cases
+  - [x] 6.1 Handle table not found error
+    - Display error message in chat
+    - Disable input when table context unavailable
+    - _Requirements: 1.4_
+  - [x] 6.2 Handle API failures gracefully
+    - Show fallback message for OpenAI failures
+    - Implement retry mechanism for network errors
+    - _Requirements: 9.4_
+  - [x] 6.3 Handle missing order gracefully
+    - Display appropriate message when no active order exists
+    - _Requirements: 4.3_
+
+- [ ]* 7. Write tests for chat functionality
+  - [ ]* 7.1 Write unit tests for ChatProvider
+    - Test message state management
+    - Test sendMessage function
+    - Test quick reply handlers
+    - _Requirements: 3.1, 3.2, 3.3_
+  - [ ]* 7.2 Write integration tests for API routes
+    - Test /api/chat with mocked OpenAI
+    - Test /api/staff-call
+    - Test /api/zone-request
+    - _Requirements: 2.1, 2.2, 2.3_
