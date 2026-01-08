@@ -1,9 +1,7 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Pencil, Trash2, Plus, ArrowLeft, X, Check, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/lib/useAdminAuth";
 
 const categories = ["Starters", "Mains", "Sides", "Drinks", "Desserts", "Hookah"];
@@ -20,8 +18,7 @@ export default function AdminMenuPage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: "", price: "", category: "Mains", image: "🍽️", description: "", allowedZones: [] });
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-2 border-[--primary] border-t-transparent rounded-full animate-spin"></div></div>;
-  if (!isAuthenticated) return null;
+  if (authLoading || !isAuthenticated) return null;
 
   const handleSave = async () => {
     if (!formData.name || !formData.price) return;
@@ -44,122 +41,130 @@ export default function AdminMenuPage() {
   const handleDelete = async (id) => { if (confirm("Delete this item?")) await removeItem({ id }); };
   const resetForm = () => { setFormData({ name: "", price: "", category: "Mains", image: "🍽️", description: "", allowedZones: [] }); setEditingItem(null); setShowForm(false); };
 
+  const totalItems = items?.length || 0;
+  const byCategory = categories.reduce((acc, cat) => {
+    acc[cat] = items?.filter(i => i.category === cat).length || 0;
+    return acc;
+  }, {});
+
   return (
-    <div className="min-h-screen">
-      <div className="glass sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link href="/admin" className="w-9 h-9 flex items-center justify-center rounded-lg bg-[--card] border border-[--border] hover:border-[--primary]/30 transition-all">
-                <ArrowLeft size={18} className="text-[--muted]" />
-              </Link>
+    <div className="p-6">
+      <div className="mb-6 border-b border-zinc-800 pb-4 flex justify-between items-start">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight">MENU</h1>
+          <p className="text-zinc-600 text-xs uppercase tracking-widest">{totalItems} items</p>
+        </div>
+        <button onClick={() => setShowForm(true)} className="bg-white text-black px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-zinc-200">
+          + ADD ITEM
+        </button>
+      </div>
+
+      {/* Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wide">{editingItem ? "Edit Item" : "Add Item"}</h2>
+              <button onClick={resetForm} className="text-zinc-500 hover:text-white text-lg">✕</button>
+            </div>
+            <div className="space-y-4">
               <div>
-                <h1 className="font-luxury text-lg font-semibold text-[--text-primary]">Menu</h1>
-                <p className="text-xs text-[--muted]">{items?.length || 0} items</p>
+                <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Name</label>
+                <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="Item name" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Price (₹)</label>
+                  <input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Emoji</label>
+                  <input type="text" value={formData.image} onChange={(e) => setFormData({ ...formData, image: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-center text-xl" placeholder="🍽️" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Category</label>
+                <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm">
+                  {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Description</label>
+                <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm resize-none" rows={2} placeholder="Short description" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Available In Zones</label>
+                <div className="space-y-1">
+                  <button type="button" onClick={selectAllZones} className={`w-full text-left px-3 py-2 text-xs uppercase tracking-wide ${formData.allowedZones.length === 0 ? "bg-white text-black font-bold" : "bg-zinc-800 text-zinc-500 hover:text-white"}`}>
+                    All Zones {formData.allowedZones.length === 0 && "✓"}
+                  </button>
+                  {zones?.map((zone) => (
+                    <button key={zone._id} type="button" onClick={() => toggleZone(zone._id)} className={`w-full text-left px-3 py-2 text-xs uppercase tracking-wide ${formData.allowedZones.includes(zone._id) ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-500 hover:text-white"}`}>
+                      {zone.name} {formData.allowedZones.includes(zone._id) && "✓"}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-            <button onClick={() => setShowForm(true)} className="flex items-center gap-1 btn-primary px-3 py-1.5 rounded-lg text-xs">
-              <Plus size={14} /> Add
-            </button>
+            <div className="flex gap-2 mt-6">
+              <button onClick={resetForm} className="flex-1 bg-zinc-800 text-zinc-400 py-2 text-xs font-bold uppercase tracking-wide hover:bg-zinc-700">Cancel</button>
+              <button onClick={handleSave} className="flex-1 bg-white text-black py-2 text-xs font-bold uppercase tracking-wide hover:bg-zinc-200">{editingItem ? "Update" : "Add"}</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="max-w-5xl mx-auto px-4 py-5">
-        {showForm && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="card rounded-2xl p-5 w-full max-w-sm animate-scale-in max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-luxury text-lg font-semibold text-[--text-primary]">{editingItem ? "Edit Item" : "Add Item"}</h2>
-                <button onClick={resetForm} className="w-8 h-8 rounded-lg bg-[--bg] border border-[--border] flex items-center justify-center hover:border-[--primary]/30">
-                  <X size={16} className="text-[--muted]" />
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-[--muted] mb-1">Name</label>
-                  <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full rounded-lg px-3 py-2 text-sm" placeholder="Item name" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-[--muted] mb-1">Price</label>
-                    <input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full rounded-lg px-3 py-2 text-sm" placeholder="0.00" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[--muted] mb-1">Emoji</label>
-                    <input type="text" value={formData.image} onChange={(e) => setFormData({ ...formData, image: e.target.value })} className="w-full rounded-lg px-3 py-2 text-center text-xl" placeholder="🍽️" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-[--muted] mb-1">Category</label>
-                  <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full rounded-lg px-3 py-2 text-sm">
-                    {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-[--muted] mb-1">Description</label>
-                  <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-lg px-3 py-2 text-sm resize-none" rows={2} placeholder="Short description" />
-                </div>
-                <div>
-                  <label className="block text-xs text-[--muted] mb-1">Available In Zones</label>
-                  <div className="space-y-1">
-                    <button type="button" onClick={selectAllZones} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${formData.allowedZones.length === 0 ? "bg-[--primary] text-black" : "bg-[--card] border border-[--border] text-[--muted] hover:border-[--primary]/30"}`}>
-                      <span>All Zones</span>{formData.allowedZones.length === 0 && <Check size={14} />}
-                    </button>
-                    {zones?.map((zone) => (
-                      <button key={zone._id} type="button" onClick={() => toggleZone(zone._id)} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${formData.allowedZones.includes(zone._id) ? "bg-[--info] text-white" : "bg-[--card] border border-[--border] text-[--muted] hover:border-[--info]/30"}`}>
-                        <span>{zone.name}</span>{formData.allowedZones.includes(zone._id) && <Check size={14} />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button onClick={resetForm} className="flex-1 btn-secondary py-2 rounded-lg text-sm">Cancel</button>
-                <button onClick={handleSave} className="flex-1 btn-primary py-2 rounded-lg text-sm">{editingItem ? "Update" : "Add"}</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {!items ? (
-          <div className="card rounded-xl p-8 text-center"><div className="w-8 h-8 border-2 border-[--primary] border-t-transparent rounded-full animate-spin mx-auto"></div></div>
-        ) : items.length === 0 ? (
-          <div className="card rounded-xl p-8 text-center"><p className="text-[--muted] mb-4">No menu items</p><button onClick={() => setShowForm(true)} className="btn-primary px-4 py-2 rounded-lg text-sm">Add First Item</button></div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 stagger-children">
-            {items.map((item) => (
-              <div key={item._id} className="card rounded-xl p-3">
-                <div className="flex gap-3">
-                  <div className="w-12 h-12 bg-[--bg] border border-[--border] rounded-lg flex items-center justify-center text-2xl flex-shrink-0">{item.image}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
+      {/* Items Table */}
+      {!items ? (
+        <div className="bg-zinc-900 border border-zinc-800 p-8 text-center text-zinc-600">Loading...</div>
+      ) : items.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 p-8 text-center">
+          <p className="text-zinc-600 mb-4">No menu items</p>
+          <button onClick={() => setShowForm(true)} className="bg-white text-black px-4 py-2 text-xs font-bold uppercase tracking-wide">Add First Item</button>
+        </div>
+      ) : (
+        <div className="bg-zinc-900 border border-zinc-800 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-950 text-[10px] uppercase tracking-wide">
+              <tr>
+                <th className="text-left py-3 px-4 text-zinc-500">Item</th>
+                <th className="text-left py-3 px-3 text-zinc-500">Category</th>
+                <th className="text-left py-3 px-3 text-zinc-500">Zones</th>
+                <th className="text-right py-3 px-3 text-zinc-500">Price</th>
+                <th className="text-right py-3 px-4 text-zinc-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item._id} className="border-t border-zinc-800/50 hover:bg-zinc-800/30">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{item.image}</span>
                       <div>
-                        <h3 className="font-medium text-[--text-primary] text-sm">{item.name}</h3>
-                        <p className="text-xs text-[--muted] line-clamp-1">{item.description}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => handleEdit(item)} className="w-7 h-7 rounded bg-[--info]/10 text-[--info] flex items-center justify-center hover:bg-[--info]/20"><Pencil size={12} /></button>
-                        <button onClick={() => handleDelete(item._id)} className="w-7 h-7 rounded bg-[--error]/10 text-[--error] flex items-center justify-center hover:bg-[--error]/20"><Trash2 size={12} /></button>
+                        <p className="font-medium">{item.name}</p>
+                        <p className="text-[10px] text-zinc-600 truncate max-w-[200px]">{item.description}</p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-[--muted] px-1.5 py-0.5 bg-[--border] rounded">{item.category}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded flex items-center gap-0.5 ${(!item.allowedZones || item.allowedZones.length === 0) ? 'bg-[--primary] text-black' : 'bg-[--info]/20 text-[--info]'}`}>
-                          <MapPin size={10} />
-                          {(!item.allowedZones || item.allowedZones.length === 0) ? "All" : item.allowedZones.length === 1 ? zones?.find(z => z._id === item.allowedZones[0])?.name?.split(' ')[0] || "1 zone" : `${item.allowedZones.length} zones`}
-                        </span>
-                      </div>
-                      <span className="font-semibold text-[--primary] text-sm">${item.price.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="text-[10px] text-zinc-500 bg-zinc-800 px-2 py-0.5">{item.category}</span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className={`text-[10px] px-2 py-0.5 ${(!item.allowedZones || item.allowedZones.length === 0) ? 'bg-white text-black' : 'bg-blue-900 text-blue-300'}`}>
+                      {(!item.allowedZones || item.allowedZones.length === 0) ? "ALL" : `${item.allowedZones.length} ZONE${item.allowedZones.length > 1 ? 'S' : ''}`}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-right font-bold">₹{item.price.toFixed(2)}</td>
+                  <td className="py-3 px-4 text-right">
+                    <button onClick={() => handleEdit(item)} className="text-xs text-zinc-500 hover:text-white mr-3">EDIT</button>
+                    <button onClick={() => handleDelete(item._id)} className="text-xs text-red-500 hover:text-red-400">DELETE</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

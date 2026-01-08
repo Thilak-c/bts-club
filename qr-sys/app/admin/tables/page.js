@@ -1,9 +1,7 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Pencil, Trash2, Plus, ArrowLeft, X, Table2 } from "lucide-react";
 import { useAdminAuth } from "@/lib/useAdminAuth";
 
 export default function AdminTablesPage() {
@@ -18,8 +16,7 @@ export default function AdminTablesPage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: "", number: "", zoneId: "" });
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-2 border-[--primary] border-t-transparent rounded-full animate-spin"></div></div>;
-  if (!isAuthenticated) return null;
+  if (authLoading || !isAuthenticated) return null;
 
   const handleSave = async () => {
     if (!formData.name || !formData.number) return;
@@ -34,64 +31,83 @@ export default function AdminTablesPage() {
   const resetForm = () => { setFormData({ name: "", number: "", zoneId: "" }); setEditingTable(null); setShowForm(false); };
 
   return (
-    <div className="min-h-screen">
-      <div className="glass sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link href="/admin" className="w-9 h-9 flex items-center justify-center rounded-lg bg-[--card] border border-[--border] hover:border-[--primary]/30 transition-all"><ArrowLeft size={18} className="text-[--muted]" /></Link>
-              <div><h1 className="font-luxury text-lg font-semibold text-[--text-primary]">Tables</h1><p className="text-xs text-[--muted]">{tables?.length || 0} tables</p></div>
+    <div className="p-6">
+      <div className="mb-6 border-b border-zinc-800 pb-4 flex justify-between items-start">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight">TABLES</h1>
+          <p className="text-zinc-600 text-xs uppercase tracking-widest">{tables?.length || 0} tables</p>
+        </div>
+        <button onClick={() => setShowForm(true)} className="bg-white text-black px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-zinc-200">
+          + ADD TABLE
+        </button>
+      </div>
+
+      {/* Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wide">{editingTable ? "Edit Table" : "Add Table"}</h2>
+              <button onClick={resetForm} className="text-zinc-500 hover:text-white text-lg">✕</button>
             </div>
-            <button onClick={() => setShowForm(true)} className="flex items-center gap-1 btn-primary px-3 py-1.5 rounded-lg text-xs"><Plus size={14} /> Add</button>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Name</label>
+                  <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="Table 1" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Number</label>
+                  <input type="number" value={formData.number} onChange={(e) => setFormData({ ...formData, number: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="1" min="1" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Zone</label>
+                <select value={formData.zoneId} onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm">
+                  <option value="">All Zones</option>
+                  {zones?.map((zone) => (<option key={zone._id} value={zone._id}>{zone.name}</option>))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button onClick={resetForm} className="flex-1 bg-zinc-800 text-zinc-400 py-2 text-xs font-bold uppercase tracking-wide hover:bg-zinc-700">Cancel</button>
+              <button onClick={handleSave} className="flex-1 bg-white text-black py-2 text-xs font-bold uppercase tracking-wide hover:bg-zinc-200">{editingTable ? "Update" : "Add"}</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="max-w-5xl mx-auto px-4 py-5">
-        {showForm && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="card rounded-2xl p-5 w-full max-w-sm animate-scale-in">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-luxury text-lg font-semibold text-[--text-primary]">{editingTable ? "Edit Table" : "Add Table"}</h2>
-                <button onClick={resetForm} className="w-8 h-8 rounded-lg bg-[--bg] border border-[--border] flex items-center justify-center"><X size={16} className="text-[--muted]" /></button>
-              </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-xs text-[--muted] mb-1">Name</label><input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full rounded-lg px-3 py-2 text-sm" placeholder="Table 1" /></div>
-                  <div><label className="block text-xs text-[--muted] mb-1">Number</label><input type="number" value={formData.number} onChange={(e) => setFormData({ ...formData, number: e.target.value })} className="w-full rounded-lg px-3 py-2 text-sm" placeholder="1" min="1" /></div>
+      {/* Tables Grid */}
+      {!tables ? (
+        <div className="bg-zinc-900 border border-zinc-800 p-8 text-center text-zinc-600">Loading...</div>
+      ) : tables.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 p-8 text-center">
+          <p className="text-zinc-600 mb-4">No tables yet</p>
+          <button onClick={() => setShowForm(true)} className="bg-white text-black px-4 py-2 text-xs font-bold uppercase tracking-wide">Add First Table</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {tables.map((table) => (
+            <div key={table._id} className="bg-zinc-900 border border-zinc-800 p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-12 h-12 bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+                  <span className="text-xl font-bold">{table.number}</span>
                 </div>
-                <div><label className="block text-xs text-[--muted] mb-1">Zone</label><select value={formData.zoneId} onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })} className="w-full rounded-lg px-3 py-2 text-sm"><option value="">All Zones</option>{zones?.map((zone) => (<option key={zone._id} value={zone._id}>{zone.name}</option>))}</select></div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => handleEdit(table)} className="text-[10px] text-zinc-500 hover:text-white px-2 py-1">EDIT</button>
+                  <button onClick={() => handleDelete(table._id)} className="text-[10px] text-red-500 hover:text-red-400 px-2 py-1">✕</button>
+                </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                <button onClick={resetForm} className="flex-1 btn-secondary py-2 rounded-lg text-sm">Cancel</button>
-                <button onClick={handleSave} className="flex-1 btn-primary py-2 rounded-lg text-sm">{editingTable ? "Update" : "Add"}</button>
-              </div>
+              <h3 className="font-medium text-sm">{table.name}</h3>
+              {table.zone ? (
+                <span className="inline-block mt-2 text-[10px] px-2 py-0.5 bg-blue-900 text-blue-300">{table.zone.name}</span>
+              ) : (
+                <span className="inline-block mt-2 text-[10px] px-2 py-0.5 bg-white text-black">ALL ZONES</span>
+              )}
             </div>
-          </div>
-        )}
-
-        {!tables ? (
-          <div className="card rounded-xl p-8 text-center"><div className="w-8 h-8 border-2 border-[--primary] border-t-transparent rounded-full animate-spin mx-auto"></div></div>
-        ) : tables.length === 0 ? (
-          <div className="card rounded-xl p-8 text-center"><Table2 size={32} className="text-[--primary] mx-auto mb-3" /><p className="text-[--muted] mb-4">No tables yet</p><button onClick={() => setShowForm(true)} className="btn-primary px-4 py-2 rounded-lg text-sm">Add First Table</button></div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 stagger-children">
-            {tables.map((table) => (
-              <div key={table._id} className="card rounded-xl p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 bg-[--primary]/20 rounded-lg flex items-center justify-center"><span className="text-[--primary] font-bold">{table.number}</span></div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => handleEdit(table)} className="w-7 h-7 rounded bg-[--info]/10 text-[--info] flex items-center justify-center hover:bg-[--info]/20"><Pencil size={12} /></button>
-                    <button onClick={() => handleDelete(table._id)} className="w-7 h-7 rounded bg-[--error]/10 text-[--error] flex items-center justify-center hover:bg-[--error]/20"><Trash2 size={12} /></button>
-                  </div>
-                </div>
-                <h3 className="font-medium text-[--text-primary] text-sm">{table.name}</h3>
-                {table.zone ? <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-[--info]/20 text-[--info] rounded">{table.zone.name}</span> : <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-[--primary] text-black rounded">All Zones</span>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

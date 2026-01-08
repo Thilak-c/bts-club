@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/lib/session";
 import { useCart } from "@/lib/cart";
-import { Trash2, Plus, Minus, CreditCard, Banknote, UserRound, ArrowLeft, ShoppingBag } from "lucide-react";
+import { Trash2, Plus, Minus, CreditCard, Banknote, UserRound, ArrowLeft, ShoppingBag, Clock } from "lucide-react";
 
 const paymentOptions = [
   { id: "pay-now", label: "Pay Now", icon: CreditCard, description: "Pay online instantly" },
@@ -24,6 +24,7 @@ export default function CartPage() {
   const [isOrdering, setIsOrdering] = useState(false);
 
   const activeOrder = useQuery(api.orders.getActiveBySession, sessionId ? { sessionId } : "skip");
+  const reservation = useQuery(api.reservations.getCurrentForTable, { tableNumber: parseInt(tableId) });
   const createOrder = useMutation(api.orders.create);
 
   useEffect(() => { if (activeOrder) router.replace(`/my-orders`); }, [activeOrder, router]);
@@ -67,6 +68,18 @@ export default function CartPage() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-4">
+        {/* Reservation Alert */}
+        {reservation && (
+          <div className={`rounded-xl p-3 border mb-4 ${reservation.isCurrent ? 'bg-amber-950/50 border-amber-700/50' : 'bg-blue-950/50 border-blue-700/50'}`}>
+            <div className="flex items-center gap-2">
+              <Clock size={16} className={reservation.isCurrent ? 'text-amber-400' : 'text-blue-400'} />
+              <p className={`text-xs ${reservation.isCurrent ? 'text-amber-300' : 'text-blue-300'}`}>
+                🪑 Table reserved {reservation.startTime} - {reservation.endTime}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2 stagger-children mb-5">
           {cart.map((item) => (
             <div key={item.menuItemId} className="card rounded-xl p-3">
@@ -74,7 +87,7 @@ export default function CartPage() {
                 <div className="w-12 h-12 bg-[--bg] rounded-lg flex items-center justify-center text-xl flex-shrink-0 border border-[--border]">{item.image}</div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-[--text-primary] text-sm">{item.name}</h3>
-                  <p className="text-[--primary] text-sm font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                  <p className="text-[--primary] text-sm font-semibold">₹{(item.price * item.quantity).toFixed(2)}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 bg-[--bg] rounded-lg p-1 border border-[--border]">
@@ -121,7 +134,7 @@ export default function CartPage() {
         <div className="max-w-lg mx-auto px-4 py-4">
           <div className="flex justify-between items-center mb-3">
             <span className="text-[--muted] text-sm">Total</span>
-            <span className="text-xl font-bold text-[--primary]">${cartTotal.toFixed(2)}</span>
+            <span className="text-xl font-bold text-[--primary]">₹{cartTotal.toFixed(2)}</span>
           </div>
           <button onClick={handleOrder} disabled={isOrdering || !paymentMethod} className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${isOrdering || !paymentMethod ? "bg-[--border] text-[--muted] cursor-not-allowed" : "btn-primary"}`}>
             {isOrdering ? <span className="flex items-center justify-center gap-2"><div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>Processing...</span> : !paymentMethod ? "Select Payment" : "Place Order"}

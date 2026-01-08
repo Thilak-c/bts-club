@@ -110,7 +110,7 @@ export default function MyOrdersPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-[--muted]">{new Date(order._creationTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <div className="flex items-center gap-1"><span className="font-semibold text-[--primary] text-sm">${order.total.toFixed(2)}</span><ChevronRight size={14} className="text-[--muted]" /></div>
+                        <div className="flex items-center gap-1"><span className="font-semibold text-[--primary] text-sm">₹{order.total.toFixed(2)}</span><ChevronRight size={14} className="text-[--muted]" /></div>
                       </div>
                     </div>
                   </Link>
@@ -132,7 +132,7 @@ export default function MyOrdersPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">{order.items.slice(0, 3).map((item, i) => (<span key={i} className="text-sm">{item.image}</span>))}</div>
-                    <span className="font-medium text-[--muted] text-sm">${order.total.toFixed(2)}</span>
+                    <span className="font-medium text-[--muted] text-sm">₹{order.total.toFixed(2)}</span>
                   </div>
                 </div>
               ))}

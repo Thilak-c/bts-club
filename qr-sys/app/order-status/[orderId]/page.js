@@ -98,13 +98,13 @@ export default function OrderStatusPage() {
                   <div className="w-8 h-8 bg-[--bg] border border-[--border] rounded-md flex items-center justify-center text-sm">{item.image}</div>
                   <div><p className="text-sm text-[--text-primary]">{item.name}</p><p className="text-xs text-[--muted]">× {item.quantity}</p></div>
                 </div>
-                <span className="text-sm text-[--muted]">${(item.price * item.quantity).toFixed(2)}</span>
+                <span className="text-sm text-[--muted]">₹{(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
           </div>
           <div className="border-t border-[--border] mt-4 pt-4 flex justify-between items-center">
             <span className="text-sm text-[--muted]">Total</span>
-            <span className="text-lg font-semibold text-[--primary]">${order.total.toFixed(2)}</span>
+            <span className="text-lg font-semibold text-[--primary]">₹{order.total.toFixed(2)}</span>
           </div>
           {order.notes && <div className="mt-4 p-3 bg-[--primary]/10 border border-[--primary]/20 rounded-lg"><p className="text-xs text-[--primary]">📝 {order.notes}</p></div>}
         </div>

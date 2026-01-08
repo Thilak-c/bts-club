@@ -1,21 +1,19 @@
 "use client";
-import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAdminAuth } from "@/lib/useAdminAuth";
-import { ArrowLeft, Clock, ChefHat, Truck, CheckCircle } from "lucide-react";
 
 const statusOptions = [
-  { value: "pending", label: "Pending", icon: Clock, cls: "status-pending" },
-  { value: "preparing", label: "Prep", icon: ChefHat, cls: "status-preparing" },
-  { value: "ready", label: "Ready", icon: Truck, cls: "status-ready" },
-  { value: "completed", label: "Done", icon: CheckCircle, cls: "status-completed" },
+  { value: "pending", label: "PENDING" },
+  { value: "preparing", label: "PREP" },
+  { value: "ready", label: "READY" },
+  { value: "completed", label: "DONE" },
 ];
 
 const paymentLabels = {
-  "pay-now": { label: "Paid", color: "text-[--success]" },
-  "pay-counter": { label: "Counter", color: "text-[--primary]" },
-  "pay-table": { label: "Table", color: "text-[--info]" },
+  "pay-now": { label: "PAID", color: "text-emerald-400" },
+  "pay-counter": { label: "COUNTER", color: "text-amber-400" },
+  "pay-table": { label: "TABLE", color: "text-blue-400" },
 };
 
 export default function AdminOrdersPage() {
@@ -23,76 +21,87 @@ export default function AdminOrdersPage() {
   const orders = useQuery(api.orders.list);
   const updateStatus = useMutation(api.orders.updateStatus);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-2 border-[--primary] border-t-transparent rounded-full animate-spin"></div></div>;
-  if (!isAuthenticated) return null;
+  if (loading || !isAuthenticated) return null;
+
+  const totalRevenue = orders?.reduce((sum, o) => sum + o.total, 0) || 0;
+  const pendingCount = orders?.filter(o => o.status === 'pending').length || 0;
 
   return (
-    <div className="min-h-screen">
-      <div className="glass sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Link href="/admin" className="w-9 h-9 flex items-center justify-center rounded-lg bg-[--card] border border-[--border] hover:border-[--primary]/30 transition-all">
-              <ArrowLeft size={18} className="text-[--muted]" />
-            </Link>
-            <div>
-              <h1 className="font-luxury text-lg font-semibold text-[--text-primary]">Orders</h1>
-              <p className="text-xs text-[--muted]">{orders?.length || 0} total</p>
-            </div>
-          </div>
-        </div>
+    <div className="p-6">
+      <div className="mb-6 border-b border-zinc-800 pb-4">
+        <h1 className="text-xl font-bold text-white tracking-tight">ORDERS</h1>
+        <p className="text-zinc-600 text-xs uppercase tracking-widest">{orders?.length || 0} total • {pendingCount} pending • ₹{totalRevenue.toFixed(0)} revenue</p>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-5">
-        {!orders || orders.length === 0 ? (
-          <div className="card rounded-xl p-8 text-center"><p className="text-[--muted]">No orders yet</p></div>
-        ) : (
-          <div className="space-y-3 stagger-children">
-            {orders.map((order) => (
-              <div key={order._id} className="card rounded-xl overflow-hidden">
-                <div className="p-3 border-b border-[--border] bg-[--bg]/50">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-[--text-primary] text-sm">#{order.orderNumber || order._id.slice(-4)}</span>
-                      <span className="text-xs text-[--muted] px-2 py-0.5 bg-[--border] rounded">Table {order.tableId}</span>
-                      {order.paymentMethod && paymentLabels[order.paymentMethod] && (
-                        <span className={`text-xs ${paymentLabels[order.paymentMethod].color}`}>{paymentLabels[order.paymentMethod].label}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {statusOptions.map((status) => {
-                        const Icon = status.icon;
-                        const isActive = order.status === status.value;
-                        return (
-                          <button key={status.value} onClick={() => updateStatus({ id: order._id, status: status.value })}
-                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${isActive ? status.cls : "opacity-50 hover:opacity-100 text-[--muted]"}`}>
-                            <Icon size={12} /><span className="hidden sm:inline">{status.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+      {!orders || orders.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 p-8 text-center">
+          <p className="text-zinc-600">No orders yet</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {orders.map((order) => (
+            <div key={order._id} className="bg-zinc-900 border border-zinc-800">
+              {/* Header */}
+              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="font-bold">#{order.orderNumber || order._id.slice(-4)}</span>
+                  <span className="text-[10px] text-zinc-500 bg-zinc-800 px-2 py-0.5">TABLE {order.tableId}</span>
+                  {order.paymentMethod && paymentLabels[order.paymentMethod] && (
+                    <span className={`text-[10px] ${paymentLabels[order.paymentMethod].color}`}>
+                      {paymentLabels[order.paymentMethod].label}
+                    </span>
+                  )}
                 </div>
-                <div className="p-3">
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {order.items.map((item, index) => (
-                      <div key={index} className="flex items-center gap-2 bg-[--bg] border border-[--border] rounded-lg px-2 py-1">
-                        <span className="text-sm">{item.image}</span>
-                        <span className="text-xs text-[--text-primary]">{item.name}</span>
-                        <span className="text-xs text-[--muted]">×{item.quantity}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {order.notes && <div className="p-2 bg-[--primary]/10 border border-[--primary]/20 rounded-lg text-xs text-[--primary] mb-3">📝 {order.notes}</div>}
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[--muted]">{new Date(order._creationTime).toLocaleString()}</span>
-                    <span className="font-semibold text-[--primary]">${order.total.toFixed(2)}</span>
-                  </div>
+                <div className="flex items-center gap-1">
+                  {statusOptions.map((status) => {
+                    const isActive = order.status === status.value;
+                    return (
+                      <button
+                        key={status.value}
+                        onClick={() => updateStatus({ id: order._id, status: status.value })}
+                        className={`px-3 py-1 text-[10px] uppercase tracking-wide transition-colors ${
+                          isActive
+                            ? status.value === 'pending' ? 'bg-amber-600 text-black'
+                            : status.value === 'preparing' ? 'bg-blue-600 text-white'
+                            : status.value === 'ready' ? 'bg-emerald-600 text-white'
+                            : 'bg-zinc-600 text-white'
+                            : 'bg-zinc-800 text-zinc-500 hover:text-white'
+                        }`}
+                      >
+                        {status.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+
+              {/* Items */}
+              <div className="p-4">
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {order.items.map((item, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-3 py-1.5">
+                      <span className="text-lg">{item.image}</span>
+                      <span className="text-sm">{item.name}</span>
+                      <span className="text-zinc-500 text-xs">×{item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {order.notes && (
+                  <div className="p-2 bg-amber-950/30 border border-amber-900/50 text-xs text-amber-400 mb-3">
+                    📝 {order.notes}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-600">{new Date(order._creationTime).toLocaleString()}</span>
+                  <span className="font-bold text-lg">₹{order.total.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
