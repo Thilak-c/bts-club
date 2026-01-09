@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAdminAuth } from "@/lib/useAdminAuth";
+import MenuItemImage from "@/components/MenuItemImage";
 
 export default function AdminDashboard() {
   const { isAuthenticated, loading } = useAdminAuth();
@@ -140,7 +141,7 @@ export default function AdminDashboard() {
                   <td className="py-2 px-3">
                     <div className="flex gap-1">
                       {order.items.slice(0, 3).map((item, i) => (
-                        <span key={i} className="text-base">{item.image}</span>
+                        <MenuItemImage key={i} storageId={item.image} alt={item.name} className="w-6 h-6 rounded object-cover" />
                       ))}
                       {order.items.length > 3 && <span className="text-zinc-600 text-xs">+{order.items.length - 3}</span>}
                     </div>

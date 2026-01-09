@@ -32,6 +32,7 @@ export const create = mutation({
   args: {
     name: v.string(),
     number: v.number(),
+    capacity: v.optional(v.number()),
     zoneId: v.optional(v.id("zones")),
   },
   handler: async (ctx, args) => {
@@ -44,6 +45,7 @@ export const update = mutation({
     id: v.id("tables"),
     name: v.string(),
     number: v.number(),
+    capacity: v.optional(v.number()),
     zoneId: v.optional(v.id("zones")),
   },
   handler: async (ctx, args) => {

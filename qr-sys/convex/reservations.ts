@@ -102,6 +102,7 @@ export const create = mutation({
     startTime: v.string(),
     endTime: v.string(),
     partySize: v.number(),
+    depositAmount: v.optional(v.number()),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -127,15 +128,51 @@ export const create = mutation({
       }
     }
 
+    // Auto-create customer account if phone provided
+    let customerId = undefined;
+    if (args.customerPhone) {
+      // Check if customer exists
+      const existingCustomer = await ctx.db
+        .query("customers")
+        .withIndex("by_phone", (q) => q.eq("phone", args.customerPhone))
+        .first();
+
+      if (existingCustomer) {
+        customerId = existingCustomer._id;
+        // Update name if different
+        if (existingCustomer.name !== args.customerName) {
+          await ctx.db.patch(existingCustomer._id, { name: args.customerName });
+        }
+        // Add deposit to balance
+        if (args.depositAmount) {
+          await ctx.db.patch(existingCustomer._id, {
+            depositBalance: existingCustomer.depositBalance + args.depositAmount,
+          });
+        }
+      } else {
+        // Create new customer
+        customerId = await ctx.db.insert("customers", {
+          name: args.customerName,
+          phone: args.customerPhone,
+          totalVisits: 0,
+          totalSpent: 0,
+          depositBalance: args.depositAmount || 0,
+          createdAt: Date.now(),
+        });
+      }
+    }
+
     return await ctx.db.insert("reservations", {
       tableId: args.tableId,
       tableNumber: table.number,
       customerName: args.customerName,
       customerPhone: args.customerPhone,
+      customerId: customerId,
       date: args.date,
       startTime: args.startTime,
       endTime: args.endTime,
       partySize: args.partySize,
+      depositAmount: args.depositAmount,
       status: "confirmed",
       notes: args.notes,
     });

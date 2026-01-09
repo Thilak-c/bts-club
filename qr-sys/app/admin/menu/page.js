@@ -1,8 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAdminAuth } from "@/lib/useAdminAuth";
+import { Upload, X, Image as ImageIcon } from "lucide-react";
+import MenuItemImage from "@/components/MenuItemImage";
 
 const categories = ["Starters", "Mains", "Sides", "Drinks", "Desserts", "Hookah"];
 
@@ -13,10 +15,49 @@ export default function AdminMenuPage() {
   const createItem = useMutation(api.menuItems.create);
   const updateItem = useMutation(api.menuItems.update);
   const removeItem = useMutation(api.menuItems.remove);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
   const [editingItem, setEditingItem] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", price: "", category: "Mains", image: "🍽️", description: "", allowedZones: [] });
+  const [formData, setFormData] = useState({ name: "", price: "", category: "Mains", image: "", description: "", allowedZones: [] });
+  const [uploading, setUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileInputRef = useRef(null);
+
+  if (authLoading || !isAuthenticated) return null;
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target.result);
+    reader.readAsDataURL(file);
+
+    setUploading(true);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const { storageId } = await result.json();
+      setFormData({ ...formData, image: storageId });
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Failed to upload image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const clearImage = () => {
+    setFormData({ ...formData, image: "" });
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   if (authLoading || !isAuthenticated) return null;
 
@@ -33,13 +74,14 @@ export default function AdminMenuPage() {
   const handleEdit = (item) => {
     setFormData({ name: item.name, price: item.price.toString(), category: item.category, image: item.image, description: item.description, allowedZones: item.allowedZones || [] });
     setEditingItem(item);
+    setImagePreview(null); // Will be loaded from storage
     setShowForm(true);
   };
 
   const toggleZone = (zoneId) => setFormData((prev) => ({ ...prev, allowedZones: prev.allowedZones.includes(zoneId) ? prev.allowedZones.filter((id) => id !== zoneId) : [...prev.allowedZones, zoneId] }));
   const selectAllZones = () => setFormData((prev) => ({ ...prev, allowedZones: [] }));
   const handleDelete = async (id) => { if (confirm("Delete this item?")) await removeItem({ id }); };
-  const resetForm = () => { setFormData({ name: "", price: "", category: "Mains", image: "🍽️", description: "", allowedZones: [] }); setEditingItem(null); setShowForm(false); };
+  const resetForm = () => { setFormData({ name: "", price: "", category: "Mains", image: "", description: "", allowedZones: [] }); setEditingItem(null); setShowForm(false); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; };
 
   const totalItems = items?.length || 0;
   const byCategory = categories.reduce((acc, cat) => {
@@ -78,8 +120,24 @@ export default function AdminMenuPage() {
                   <input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="0.00" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Emoji</label>
-                  <input type="text" value={formData.image} onChange={(e) => setFormData({ ...formData, image: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-center text-xl" placeholder="🍽️" />
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Image</label>
+                  <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  {imagePreview || formData.image ? (
+                    <div className="relative w-full h-[42px] bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+                      {imagePreview ? (
+                        <img src={imagePreview} alt="Preview" className="h-8 w-8 object-cover rounded" />
+                      ) : (
+                        <ImageIcon size={20} className="text-zinc-500" />
+                      )}
+                      <button type="button" onClick={clearImage} className="absolute right-1 top-1 text-zinc-500 hover:text-red-400">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm flex items-center justify-center gap-2 hover:border-zinc-600">
+                      {uploading ? "Uploading..." : <><Upload size={14} /> Upload</>}
+                    </button>
+                  )}
                 </div>
               </div>
               <div>
@@ -139,7 +197,7 @@ export default function AdminMenuPage() {
                 <tr key={item._id} className="border-t border-zinc-800/50 hover:bg-zinc-800/30">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{item.image}</span>
+                      <MenuItemImage storageId={item.image} alt={item.name} className="w-10 h-10 object-cover rounded" />
                       <div>
                         <p className="font-medium">{item.name}</p>
                         <p className="text-[10px] text-zinc-600 truncate max-w-[200px]">{item.description}</p>

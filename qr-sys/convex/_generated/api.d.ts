@@ -9,13 +9,17 @@
  */
 
 import type * as alerts from "../alerts.js";
+import type * as customers from "../customers.js";
 import type * as deductions from "../deductions.js";
+import type * as files from "../files.js";
 import type * as inventory from "../inventory.js";
 import type * as menuItems from "../menuItems.js";
 import type * as orders from "../orders.js";
 import type * as reports from "../reports.js";
 import type * as reservations from "../reservations.js";
+import type * as staff from "../staff.js";
 import type * as staffCalls from "../staffCalls.js";
+import type * as staffNotifications from "../staffNotifications.js";
 import type * as tables from "../tables.js";
 import type * as wastage from "../wastage.js";
 import type * as zoneRequests from "../zoneRequests.js";
@@ -29,13 +33,17 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   alerts: typeof alerts;
+  customers: typeof customers;
   deductions: typeof deductions;
+  files: typeof files;
   inventory: typeof inventory;
   menuItems: typeof menuItems;
   orders: typeof orders;
   reports: typeof reports;
   reservations: typeof reservations;
+  staff: typeof staff;
   staffCalls: typeof staffCalls;
+  staffNotifications: typeof staffNotifications;
   tables: typeof tables;
   wastage: typeof wastage;
   zoneRequests: typeof zoneRequests;

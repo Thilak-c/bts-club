@@ -3,7 +3,11 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { CheckCircle, ChefHat, Truck, Clock, ArrowLeft, CreditCard, Banknote, UserRound } from "lucide-react";
+import { 
+  CheckCircle, ChefHat, Truck, Clock, ArrowLeft, 
+  CreditCard, Banknote, UserRound 
+} from "lucide-react";
+import MenuItemImage from "@/components/MenuItemImage";
 
 const statusSteps = [
   { key: "pending", label: "Received", icon: Clock, cls: "status-pending" },
@@ -22,15 +26,27 @@ export default function OrderStatusPage() {
   const { orderId } = useParams();
   const order = useQuery(api.orders.getById, { id: orderId });
 
-  if (order === undefined) return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-2 border-[--primary] border-t-transparent rounded-full animate-spin"></div></div>;
+  // Loading state
+  if (order === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 spinner rounded-full" />
+      </div>
+    );
+  }
 
+  // Not found state
   if (!order) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center px-6">
         <div className="text-center animate-scale-in">
-          <div className="text-4xl mb-3">🔍</div>
-          <h1 className="font-luxury text-lg font-semibold text-[--text-primary] mb-2">Order Not Found</h1>
-          <Link href="/" className="text-[--primary] text-sm hover:underline">Go Home</Link>
+          <div className="text-6xl mb-5">🔍</div>
+          <h1 className="font-luxury text-xl font-semibold text-[--text-primary] mb-3">
+            Order Not Found
+          </h1>
+          <Link href="/" className="text-[--primary] text-sm hover:underline">
+            Go Home
+          </Link>
         </div>
       </div>
     );
@@ -42,46 +58,85 @@ export default function OrderStatusPage() {
   const PaymentIcon = paymentLabels[order.paymentMethod]?.icon;
 
   return (
-    <div className="min-h-screen pb-6">
-      <div className="glass sticky top-0 z-10">
-        <div className="max-w-lg mx-auto px-4 py-3">
+    <div className="min-h-screen pb-8">
+      {/* Header */}
+      <header className="glass sticky top-0 z-10">
+        <div className="max-w-lg mx-auto px-5 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/my-orders" className="w-9 h-9 flex items-center justify-center rounded-lg bg-[--card] border border-[--border] hover:border-[--primary]/30 transition-all"><ArrowLeft size={18} className="text-[--muted]" /></Link>
-            <div className="text-center"><h1 className="font-luxury text-lg font-semibold text-[--text-primary]">Order Status</h1><p className="text-xs text-[--muted]">#{order.orderNumber || order._id.slice(-4)}</p></div>
-            <div className="w-9"></div>
+            <Link 
+              href="/my-orders" 
+              className="w-11 h-11 flex items-center justify-center rounded-xl bg-[--card] border border-[--border] hover:border-[--border-light] transition-all"
+            >
+              <ArrowLeft size={18} className="text-[--text-muted]" />
+            </Link>
+            <div className="text-center">
+              <h1 className="font-luxury text-lg font-semibold text-[--text-primary]">Order Status</h1>
+              <p className="text-xs text-[--text-muted]">#{order.orderNumber || order._id.slice(-4)}</p>
+            </div>
+            <div className="w-11" />
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-lg mx-auto px-4 py-6">
-        <div className="text-center mb-6 animate-scale-in">
-          <div className={`w-20 h-20 mx-auto mb-3 rounded-full flex items-center justify-center ${currentStatus.cls}`}>
-            <currentStatus.icon size={36} />
+      <div className="max-w-lg mx-auto px-5 py-8">
+        {/* Current Status Hero */}
+        <div className="text-center mb-10 animate-scale-in">
+          <div className={`w-24 h-24 mx-auto mb-5 rounded-2xl flex items-center justify-center ${currentStatus.cls} animate-glow`}>
+            <currentStatus.icon size={40} />
           </div>
-          <h2 className="font-luxury text-xl font-semibold text-[--text-primary] mb-1">{currentStatus.label}</h2>
+          <h2 className="font-luxury text-2xl font-semibold text-[--text-primary] mb-2">
+            {currentStatus.label}
+          </h2>
           {order.paymentMethod && paymentLabels[order.paymentMethod] && (
-            <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-[--card] border border-[--border] text-[--muted] text-xs">
-              {PaymentIcon && <PaymentIcon size={12} />}{paymentLabels[order.paymentMethod].label}
+            <div className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-full bg-[--card] border border-[--border] text-[--text-muted] text-xs">
+              {PaymentIcon && <PaymentIcon size={14} />}
+              {paymentLabels[order.paymentMethod].label}
             </div>
           )}
         </div>
 
-        <div className="card rounded-xl p-5 mb-5 animate-slide-up">
+        {/* Progress Steps */}
+        <div className="card rounded-xl p-6 mb-6 animate-slide-up">
           <div className="relative">
             {statusSteps.map((step, index) => {
               const Icon = step.icon;
               const isActive = index <= currentStepIndex;
               const isCurrent = index === currentStepIndex;
               const isLast = index === statusSteps.length - 1;
+              
               return (
-                <div key={step.key} className="flex items-start gap-3 relative">
-                  {!isLast && <div className={`absolute left-4 top-8 w-0.5 h-8 ${index < currentStepIndex ? 'bg-[--primary]' : 'bg-[--border]'}`}></div>}
-                  <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isActive ? step.cls : 'bg-[--card] border border-[--border]'}`}>
-                    <Icon size={16} className={isActive ? '' : 'text-[--muted]'} />
+                <div key={step.key} className="flex items-start gap-4 relative">
+                  {/* Connector line */}
+                  {!isLast && (
+                    <div 
+                      className={`absolute left-5 top-10 w-0.5 h-10 transition-colors duration-500 ${
+                        index < currentStepIndex ? 'bg-[--primary]' : 'bg-[--border]'
+                      }`} 
+                    />
+                  )}
+                  
+                  {/* Step icon */}
+                  <div 
+                    className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
+                      isActive ? step.cls : 'bg-[--card] border border-[--border]'
+                    }`}
+                  >
+                    <Icon size={18} className={isActive ? '' : 'text-[--text-dim]'} />
                   </div>
-                  <div className={`pb-6 ${isLast ? "pb-0" : ""}`}>
-                    <p className={`text-sm font-medium ${isActive ? "text-[--text-primary]" : "text-[--muted]/50"}`}>{step.label}</p>
-                    {isCurrent && !isCompleted && <span className="inline-flex items-center gap-1 text-xs mt-0.5 text-[--primary]"><span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[--primary]"></span>In Progress</span>}
+                  
+                  {/* Step label */}
+                  <div className={`pb-8 ${isLast ? "pb-0" : ""}`}>
+                    <p className={`text-sm font-medium transition-colors ${
+                      isActive ? "text-[--text-primary]" : "text-[--text-dim]"
+                    }`}>
+                      {step.label}
+                    </p>
+                    {isCurrent && !isCompleted && (
+                      <span className="inline-flex items-center gap-2 text-xs mt-1 text-[--primary]">
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[--primary]" />
+                        In Progress
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -89,34 +144,77 @@ export default function OrderStatusPage() {
           </div>
         </div>
 
-        <div className="card rounded-xl p-5 mb-5 animate-slide-up">
-          <h3 className="text-xs tracking-widest text-[--muted] uppercase mb-4">Order Summary</h3>
-          <div className="space-y-3">
+        {/* Order Summary */}
+        <div className="card rounded-xl p-6 mb-6 animate-slide-up delay-100" style={{animationFillMode: 'forwards'}}>
+          <h3 className="text-[10px] tracking-[0.2em] text-[--text-muted] uppercase mb-5">
+            Order Summary
+          </h3>
+          <div className="space-y-4">
             {order.items.map((item, index) => (
               <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-[--bg] border border-[--border] rounded-md flex items-center justify-center text-sm">{item.image}</div>
-                  <div><p className="text-sm text-[--text-primary]">{item.name}</p><p className="text-xs text-[--muted]">× {item.quantity}</p></div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[--bg-elevated] border border-[--border] rounded-lg flex items-center justify-center overflow-hidden">
+                    <MenuItemImage storageId={item.image} alt={item.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[--text-primary]">{item.name}</p>
+                    <p className="text-xs text-[--text-dim]">× {item.quantity}</p>
+                  </div>
                 </div>
-                <span className="text-sm text-[--muted]">₹{(item.price * item.quantity).toFixed(2)}</span>
+                <span className="text-sm text-[--text-muted]">
+                  ₹{(item.price * item.quantity).toFixed(0)}
+                </span>
               </div>
             ))}
           </div>
-          <div className="border-t border-[--border] mt-4 pt-4 flex justify-between items-center">
-            <span className="text-sm text-[--muted]">Total</span>
-            <span className="text-lg font-semibold text-[--primary]">₹{order.total.toFixed(2)}</span>
+          
+          <div className="divider-glow my-5" />
+          
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-[--text-muted]">Total</span>
+            <span className="text-xl font-luxury font-semibold text-gradient">
+              ₹{order.total.toFixed(0)}
+            </span>
           </div>
-          {order.notes && <div className="mt-4 p-3 bg-[--primary]/10 border border-[--primary]/20 rounded-lg"><p className="text-xs text-[--primary]">📝 {order.notes}</p></div>}
+          
+          {order.notes && (
+            <div className="mt-5 p-4 bg-[--primary]/5 border border-[--primary]/20 rounded-xl">
+              <p className="text-xs text-[--primary]">📝 {order.notes}</p>
+            </div>
+          )}
         </div>
 
-        <div className="text-center text-xs text-[--muted] mb-5">Table {order.tableId} • {new Date(order._creationTime).toLocaleString()}</div>
-
-        <div className="space-y-2 animate-fade-in">
-          <Link href="/my-orders" className="block text-center card rounded-xl py-3 text-sm text-[--muted] hover:border-[--primary]/30 transition-all">← All Orders</Link>
-          {isCompleted && <Link href="/" className="block text-center btn-primary py-3 rounded-xl text-sm font-semibold">Order Again</Link>}
+        {/* Meta info */}
+        <div className="text-center text-xs text-[--text-dim] mb-6">
+          Table {order.tableId} • {new Date(order._creationTime).toLocaleString()}
         </div>
 
-        {!isCompleted && <div className="mt-5 p-3 bg-[--primary]/10 border border-[--primary]/20 rounded-xl text-center animate-fade-in"><p className="text-xs text-[--primary]">🔄 Live updates • Sit back and relax</p></div>}
+        {/* Actions */}
+        <div className="space-y-3 animate-fade-in delay-200" style={{animationFillMode: 'forwards'}}>
+          <Link 
+            href="/my-orders" 
+            className="block text-center btn-secondary py-4 rounded-xl text-sm font-medium"
+          >
+            ← All Orders
+          </Link>
+          {isCompleted && (
+            <Link 
+              href="/" 
+              className="block text-center btn-primary py-4 rounded-xl text-sm font-semibold"
+            >
+              Order Again
+            </Link>
+          )}
+        </div>
+
+        {/* Live update notice */}
+        {!isCompleted && (
+          <div className="mt-6 p-4 bg-[--primary]/5 border border-[--primary]/20 rounded-xl text-center animate-fade-in delay-300" style={{animationFillMode: 'forwards'}}>
+            <p className="text-xs text-[--primary]">
+              🔄 Live updates enabled • Sit back and relax
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

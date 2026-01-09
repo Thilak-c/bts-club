@@ -14,21 +14,26 @@ export default function AdminTablesPage() {
 
   const [editingTable, setEditingTable] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", number: "", zoneId: "" });
+  const [formData, setFormData] = useState({ name: "", number: "", capacity: "", zoneId: "" });
 
   if (authLoading || !isAuthenticated) return null;
 
   const handleSave = async () => {
     if (!formData.name || !formData.number) return;
-    const data = { name: formData.name, number: parseInt(formData.number), zoneId: formData.zoneId || undefined };
+    const data = { 
+      name: formData.name, 
+      number: parseInt(formData.number), 
+      capacity: formData.capacity ? parseInt(formData.capacity) : undefined,
+      zoneId: formData.zoneId || undefined 
+    };
     if (editingTable) await updateTable({ id: editingTable._id, ...data });
     else await createTable(data);
     resetForm();
   };
 
-  const handleEdit = (table) => { setFormData({ name: table.name, number: table.number.toString(), zoneId: table.zoneId || "" }); setEditingTable(table); setShowForm(true); };
+  const handleEdit = (table) => { setFormData({ name: table.name, number: table.number.toString(), capacity: table.capacity?.toString() || "", zoneId: table.zoneId || "" }); setEditingTable(table); setShowForm(true); };
   const handleDelete = async (id) => { if (confirm("Delete this table?")) await removeTable({ id }); };
-  const resetForm = () => { setFormData({ name: "", number: "", zoneId: "" }); setEditingTable(null); setShowForm(false); };
+  const resetForm = () => { setFormData({ name: "", number: "", capacity: "", zoneId: "" }); setEditingTable(null); setShowForm(false); };
 
   return (
     <div className="p-6">
@@ -60,6 +65,10 @@ export default function AdminTablesPage() {
                   <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Number</label>
                   <input type="number" value={formData.number} onChange={(e) => setFormData({ ...formData, number: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="1" min="1" />
                 </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Capacity (seats)</label>
+                <input type="number" value={formData.capacity} onChange={(e) => setFormData({ ...formData, capacity: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="4" min="1" max="20" />
               </div>
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Zone</label>
@@ -99,6 +108,7 @@ export default function AdminTablesPage() {
                 </div>
               </div>
               <h3 className="font-medium text-sm">{table.name}</h3>
+              <p className="text-zinc-500 text-xs mt-1">{table.capacity ? `${table.capacity} seats` : 'No limit'}</p>
               {table.zone ? (
                 <span className="inline-block mt-2 text-[10px] px-2 py-0.5 bg-blue-900 text-blue-300">{table.zone.name}</span>
               ) : (

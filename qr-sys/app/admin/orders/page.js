@@ -2,6 +2,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAdminAuth } from "@/lib/useAdminAuth";
+import MenuItemImage from "@/components/MenuItemImage";
 
 const statusOptions = [
   { value: "pending", label: "PENDING" },
@@ -80,7 +81,7 @@ export default function AdminOrdersPage() {
                 <div className="flex flex-wrap gap-2 mb-3">
                   {order.items.map((item, index) => (
                     <div key={index} className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-3 py-1.5">
-                      <span className="text-lg">{item.image}</span>
+                      <MenuItemImage storageId={item.image} alt={item.name} className="w-6 h-6 rounded object-cover" />
                       <span className="text-sm">{item.name}</span>
                       <span className="text-zinc-500 text-xs">×{item.quantity}</span>
                     </div>
