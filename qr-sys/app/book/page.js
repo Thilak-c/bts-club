@@ -1,36 +1,28 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Script from "next/script";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ArrowLeft, Check, Users } from "lucide-react";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
 
 // Generate next 14 days (excluding Saturday and Sunday - no reservations on weekends)
 const generateDates = () => {
   const dates = [];
-  let daysAdded = 0;
-  let i = 0;
-  while (daysAdded < 14) {
+  for (let i = 0; i < 23; i++) {
     const date = new Date();
     date.setDate(date.getDate() + i);
-    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-    
-    // Skip weekends
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      dates.push({
-        value: date.toISOString().split('T')[0],
-        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
-        dateNum: date.getDate(),
-        month: date.toLocaleDateString('en-US', { month: 'short' }),
-      });
-      daysAdded++;
-    }
-    i++;
+    dates.push({
+      value: date.toISOString().split('T')[0],
+      day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      dateNum: date.getDate(),
+      month: date.toLocaleDateString('en-US', { month: 'short' }),
+    });
   }
   return dates;
 };
-
 // Time slots from 12 PM to 10 PM
 const timeSlots = [
   { value: "12:00", label: "12 PM" },
@@ -54,6 +46,7 @@ const timeSlots = [
   { value: "21:00", label: "9 PM" },
   { value: "21:30", label: "9:30" },
   { value: "22:00", label: "10 PM" },
+  
 ];
 
 const getTimeLabel = (value) => timeSlots.find(t => t.value === value)?.label || value;
@@ -125,16 +118,28 @@ export default function BookTablePage() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedTables, setSelectedTables] = useState([]); // For multi-table booking
   const [selectedDate, setSelectedDate] = useState(generateDates()[0].value);
-  const [formData, setFormData] = useState({
-    customerName: "",
-    customerPhone: "",
-    startTime: "18:00",
-    endTime: "20:00",
-    partySize: 2,
-    notes: "",
-  });
+  const [startTime, setStartTime] = useState("18:00");
+  const [endTime, setEndTime] = useState("20:00");
+  const [partySize, setPartySize] = useState(2);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // React Hook Form for customer details
+  const { 
+    register, 
+    handleSubmit: handleFormSubmit, 
+    formState: { errors },
+    watch,
+    getValues
+  } = useForm({
+    defaultValues: {
+      customerName: "",
+      countryCode: "+91",
+      customerPhone: "",
+      notes: "",
+    }
+  });
 
   // Deposit rate per seat
   const DEPOSIT_PER_PERSON = 200;
@@ -148,45 +153,77 @@ export default function BookTablePage() {
     return reservations?.filter(r => r.tableId === tableId && r.status === "confirmed") || [];
   };
 
-  const handleSubmit = async () => {
+  // Razorpay payment handler
+  const initiatePayment = (formData) => {
     const tablesToBook = needsMultipleTables ? selectedTables : [selectedTable];
-    if (tablesToBook.length === 0 || !formData.customerName || !formData.customerPhone) {
-      setError("Please fill name and phone number");
+    if (tablesToBook.length === 0) {
+      setError("Please select a table");
       return;
     }
-    try {
-      setError("");
-      // Calculate deposit per table for multi-table bookings
-      const depositPerTable = needsMultipleTables 
-        ? Math.ceil(totalDeposit / tablesToBook.length)
-        : totalDeposit;
-      
-      // Create reservation for each table (customer account auto-created on first table)
-      for (let i = 0; i < tablesToBook.length; i++) {
-        const table = tablesToBook[i];
-        await createReservation({
-          tableId: table._id,
-          customerName: formData.customerName,
-          customerPhone: formData.customerPhone,
-          date: selectedDate,
-          startTime: formData.startTime,
-          endTime: formData.endTime,
-          partySize: formData.partySize,
-          depositAmount: i === 0 ? totalDeposit : 0, // Only add full deposit on first reservation
-          notes: needsMultipleTables 
-            ? `${formData.notes || ''} [Group booking: Tables ${selectedTables.map(t => t.number).join(', ')}]`.trim()
-            : formData.notes || undefined,
-        });
-      }
-      
-      // Store customer phone in localStorage for auto-login
-      localStorage.setItem('customerPhone', formData.customerPhone);
-      localStorage.setItem('customerName', formData.customerName);
-      
-      setSuccess(true);
-    } catch (err) {
-      setError(err.message);
-    }
+
+    setIsProcessing(true);
+    setError("");
+
+    // Combine country code with phone number
+    const fullPhone = `${formData.countryCode}${formData.customerPhone}`;
+
+    const options = {
+      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_yourkeyhere",
+      amount: totalDeposit * 100, // Amount in paise
+      currency: "INR",
+      name: "BTS DISC",
+      description: `Table Reservation Deposit - ${formatDate(selectedDate)}`,
+      image: "/logo.png",
+      handler: async function (response) {
+        // Payment successful - create reservation
+        try {
+          for (let i = 0; i < tablesToBook.length; i++) {
+            const table = tablesToBook[i];
+            await createReservation({
+              tableId: table._id,
+              customerName: formData.customerName,
+              customerPhone: fullPhone,
+              date: selectedDate,
+              startTime: startTime,
+              endTime: endTime,
+              partySize: partySize,
+              depositAmount: i === 0 ? totalDeposit : 0,
+              notes: needsMultipleTables 
+                ? `${formData.notes || ''} [Group booking: Tables ${selectedTables.map(t => t.number).join(', ')}] [Payment: ${response.razorpay_payment_id}]`.trim()
+                : `${formData.notes || ''} [Payment: ${response.razorpay_payment_id}]`.trim(),
+            });
+          }
+          
+          // Store customer phone in localStorage for auto-login
+          localStorage.setItem('customerPhone', fullPhone);
+          localStorage.setItem('customerName', formData.customerName);
+          
+          setSuccess(true);
+        } catch (err) {
+          setError(err.message);
+        }
+        setIsProcessing(false);
+      },
+      prefill: {
+        name: formData.customerName,
+        contact: fullPhone,
+      },
+      theme: {
+        color: "#d4af7d",
+      },
+      modal: {
+        ondismiss: function () {
+          setIsProcessing(false);
+        },
+      },
+    };
+
+    const razorpay = new window.Razorpay(options);
+    razorpay.on("payment.failed", function (response) {
+      setError("Payment failed. Please try again.");
+      setIsProcessing(false);
+    });
+    razorpay.open();
   };
 
   const formatDate = (dateStr) => {
@@ -196,7 +233,7 @@ export default function BookTablePage() {
 
   // Get max capacity from all tables
   const maxTableCapacity = tables?.reduce((max, t) => Math.max(max, t.capacity || 4), 0) || 4;
-  const needsMultipleTables = formData.partySize > maxTableCapacity;
+  const needsMultipleTables = partySize > maxTableCapacity;
 
   // Calculate deposit based on selected table(s) capacity
   const totalTableCapacity = needsMultipleTables 
@@ -208,20 +245,20 @@ export default function BookTablePage() {
   // For single table mode, filter by capacity
   const availableTables = tables?.filter(table => {
     // In multi-table mode, show all tables regardless of capacity
-    if (!needsMultipleTables && table.capacity && formData.partySize > table.capacity) return false;
+    if (!needsMultipleTables && table.capacity && partySize > table.capacity) return false;
     
     // Filter by time conflicts
     const tableRes = getTableReservations(table._id);
     return !tableRes.some(r => 
-      (formData.startTime >= r.startTime && formData.startTime < r.endTime) ||
-      (formData.endTime > r.startTime && formData.endTime <= r.endTime) ||
-      (formData.startTime <= r.startTime && formData.endTime >= r.endTime)
+      (startTime >= r.startTime && startTime < r.endTime) ||
+      (endTime > r.startTime && endTime <= r.endTime) ||
+      (startTime <= r.startTime && endTime >= r.endTime)
     );
   }) || [];
 
   // Calculate total capacity of selected tables
   const totalSelectedCapacity = selectedTables.reduce((sum, t) => sum + (t.capacity || 4), 0);
-  const hasEnoughCapacity = totalSelectedCapacity >= formData.partySize;
+  const hasEnoughCapacity = totalSelectedCapacity >= partySize;
 
   // Toggle table selection for multi-table mode
   const toggleTableSelection = (table) => {
@@ -261,18 +298,18 @@ export default function BookTablePage() {
           <div className="text-center mb-10">
             <p className="text-[--text-dim] text-[10px] uppercase tracking-[0.3em] mb-4 opacity-0 animate-fade-in" style={{animationDelay: '0.4s', animationFillMode: 'forwards'}}>{formatDate(selectedDate)}</p>
             <div className="flex items-center gap-5">
-              <span className="text-5xl font-luxury font-semibold text-[--text-primary] opacity-0 animate-slide-in-left" style={{animationDelay: '0.5s', animationFillMode: 'forwards'}}>{getTimeLabel(formData.startTime)}</span>
+              <span className="text-5xl font-luxury font-semibold text-[--text-primary] opacity-0 animate-slide-in-left" style={{animationDelay: '0.5s', animationFillMode: 'forwards'}}>{getTimeLabel(startTime)}</span>
               <span className="text-[--text-dim] text-2xl opacity-0 animate-scale-in" style={{animationDelay: '0.6s', animationFillMode: 'forwards'}}>→</span>
-              <span className="text-5xl font-luxury font-semibold text-[--text-primary] opacity-0 animate-slide-in-right" style={{animationDelay: '0.5s', animationFillMode: 'forwards'}}>{getTimeLabel(formData.endTime)}</span>
+              <span className="text-5xl font-luxury font-semibold text-[--text-primary] opacity-0 animate-slide-in-right" style={{animationDelay: '0.5s', animationFillMode: 'forwards'}}>{getTimeLabel(endTime)}</span>
             </div>
           </div>
           <div className="divider-glow w-24 mb-10 opacity-0 animate-expand" style={{animationDelay: '0.7s', animationFillMode: 'forwards'}} />
           <div className="text-center opacity-0 animate-slide-up" style={{animationDelay: '0.8s', animationFillMode: 'forwards'}}>
-            <p className="text-[--text-primary] text-xl font-luxury">{formData.customerName}</p>
+            <p className="text-[--text-primary] text-xl font-luxury">{getValues('customerName')}</p>
             <p className="text-[--text-muted] text-sm mt-1">
               {needsMultipleTables 
-                ? `Tables ${selectedTables.map(t => t.number).join(', ')} • ${formData.partySize} guests`
-                : `${selectedTable?.name} • ${formData.partySize} guest${formData.partySize !== 1 ? 's' : ''}`
+                ? `Tables ${selectedTables.map(t => t.number).join(', ')} • ${partySize} guests`
+                : `${selectedTable?.name} • ${partySize} guest${partySize !== 1 ? 's' : ''}`
               }
             </p>
           </div>
@@ -290,6 +327,9 @@ export default function BookTablePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Razorpay Script */}
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" />
+      
       <div className="p-4 flex items-center justify-between">
         <button onClick={() => step > 1 ? setStep(step - 1) : router.back()} className="p-2 -ml-2">
           <ArrowLeft size={20} className="text-[--text-muted]" />
@@ -333,7 +373,7 @@ export default function BookTablePage() {
             <p className="text-[--text-dim] text-[10px] uppercase tracking-[0.3em] mb-3 text-center">Start Time</p>
             <div className="flex flex-wrap gap-2 justify-center mb-6">
               {timeSlots.slice(0, -2).map(slot => (
-                <button key={`start-${slot.value}`} onClick={() => { const idx = timeSlots.findIndex(t => t.value === slot.value); setFormData({ ...formData, startTime: slot.value, endTime: timeSlots[Math.min(idx + 4, timeSlots.length - 1)].value }); }} className={`px-4 py-2.5 rounded-lg text-sm transition-all ${formData.startTime === slot.value ? 'bg-[--primary] text-white' : 'bg-[--card] border border-[--border] text-[--text-muted]'}`}>
+                <button key={`start-${slot.value}`} onClick={() => { const idx = timeSlots.findIndex(t => t.value === slot.value); setStartTime(slot.value); setEndTime(timeSlots[Math.min(idx + 4, timeSlots.length - 1)].value); }} className={`px-4 py-2.5 rounded-lg text-sm transition-all ${startTime === slot.value ? 'bg-[--primary] text-white' : 'bg-[--card] border border-[--border] text-[--text-muted]'}`}>
                   {slot.label}
                 </button>
               ))}
@@ -341,8 +381,8 @@ export default function BookTablePage() {
 
             <p className="text-[--text-dim] text-[10px] uppercase tracking-[0.3em] mb-3 text-center">End Time</p>
             <div className="flex flex-wrap gap-2 justify-center mb-6">
-              {timeSlots.filter(t => t.value > formData.startTime).map(slot => (
-                <button key={`end-${slot.value}`} onClick={() => setFormData({ ...formData, endTime: slot.value })} className={`px-4 py-2.5 rounded-lg text-sm transition-all ${formData.endTime === slot.value ? 'bg-[--primary] text-white' : 'bg-[--card] border border-[--border] text-[--text-muted]'}`}>
+              {timeSlots.filter(t => t.value > startTime).map(slot => (
+                <button key={`end-${slot.value}`} onClick={() => setEndTime(slot.value)} className={`px-4 py-2.5 rounded-lg text-sm transition-all ${endTime === slot.value ? 'bg-[--primary] text-white' : 'bg-[--card] border border-[--border] text-[--text-muted]'}`}>
                   {slot.label}
                 </button>
               ))}
@@ -350,10 +390,10 @@ export default function BookTablePage() {
           </div>
           <div className="p-4 border-t border-[--border] bg-[--bg]">
             <div className="text-center mb-3">
-              <span className="text-[--text-primary] font-semibold">{getTimeLabel(formData.startTime)}</span>
+              <span className="text-[--text-primary] font-semibold">{getTimeLabel(startTime)}</span>
               <span className="text-[--text-dim] mx-2">→</span>
-              <span className="text-[--text-primary] font-semibold">{getTimeLabel(formData.endTime)}</span>
-              <span className="text-[--text-muted] ml-2">({getDuration(formData.startTime, formData.endTime)})</span>
+              <span className="text-[--text-primary] font-semibold">{getTimeLabel(endTime)}</span>
+              <span className="text-[--text-muted] ml-2">({getDuration(startTime, endTime)})</span>
             </div>
             <button onClick={() => setStep(2)} className="btn-primary w-full py-4 rounded-xl text-sm font-medium">Continue</button>
           </div>
@@ -368,17 +408,17 @@ export default function BookTablePage() {
               <p className="text-[--text-dim] text-[10px] uppercase tracking-[0.2em] mb-3 text-center font-medium">Party Size</p>
               <div className="flex items-center justify-center gap-5">
                 <button 
-                  onClick={() => setFormData({ ...formData, partySize: Math.max(1, formData.partySize - 1) })} 
+                  onClick={() => setPartySize(Math.max(1, partySize - 1))} 
                   className="w-12 h-12 rounded-full bg-[--bg-elevated] border border-[--border] flex items-center justify-center text-[--text-muted] active:scale-90 active:bg-[--card-hover] text-xl font-medium transition-all"
                 >
                   −
                 </button>
                 <div className="flex items-center gap-2 min-w-[80px] justify-center">
-                  <span className="text-5xl font-bold text-[--text-primary] tabular-nums">{formData.partySize}</span>
+                  <span className="text-5xl font-bold text-[--text-primary] tabular-nums">{partySize}</span>
                   <Users size={20} className="text-[--text-dim]" />
                 </div>
                 <button 
-                  onClick={() => setFormData({ ...formData, partySize: formData.partySize + 1 })} 
+                  onClick={() => setPartySize(partySize + 1)} 
                   className="w-12 h-12 rounded-full bg-[--bg-elevated] border border-[--border] flex items-center justify-center text-[--text-muted] active:scale-90 active:bg-[--card-hover] text-xl font-medium transition-all"
                 >
                   +
@@ -415,7 +455,7 @@ export default function BookTablePage() {
                 {/* Multi-table capacity indicator */}
                 {needsMultipleTables && selectedTables.length > 0 && (
                   <div className={`mb-4 p-3 rounded-xl text-center text-sm ${hasEnoughCapacity ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-[--primary]/10 text-[--primary] border border-[--primary]/20'}`}>
-                    {totalSelectedCapacity} / {formData.partySize} seats selected
+                    {totalSelectedCapacity} / {partySize} seats selected
                     {hasEnoughCapacity && ' ✓'}
                   </div>
                 )}
@@ -468,7 +508,7 @@ export default function BookTablePage() {
                     ))}
                   </div>
                   <p className="text-[--text-muted] text-xs">
-                    {selectedTables.length} tables • {totalSelectedCapacity} seats for {formData.partySize} guests
+                    {selectedTables.length} tables • {totalSelectedCapacity} seats for {partySize} guests
                   </p>
                 </div>
               ) : (
@@ -488,7 +528,7 @@ export default function BookTablePage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-[--text-secondary] text-xs">{formData.partySize} guest{formData.partySize !== 1 ? 's' : ''}</p>
+                    <p className="text-[--text-secondary] text-xs">{partySize} guest{partySize !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
               ) : (
@@ -501,7 +541,7 @@ export default function BookTablePage() {
               className="btn-primary w-full py-4 rounded-xl text-sm font-semibold"
             >
               {needsMultipleTables && !hasEnoughCapacity && selectedTables.length > 0 
-                ? `Need ${formData.partySize - totalSelectedCapacity} more seats` 
+                ? `Need ${partySize - totalSelectedCapacity} more seats` 
                 : 'Continue'}
             </button>
           </div>
@@ -513,11 +553,11 @@ export default function BookTablePage() {
           <div className="flex-1 px-4 overflow-y-auto pb-6">
             <div className="text-center mb-6">
               <p className="text-[--text-dim] text-[10px] uppercase tracking-[0.3em] mb-2">{formatDate(selectedDate)}</p>
-              <p className="text-3xl font-luxury font-semibold text-[--text-primary]">{getTimeLabel(formData.startTime)} → {getTimeLabel(formData.endTime)}</p>
+              <p className="text-3xl font-luxury font-semibold text-[--text-primary]">{getTimeLabel(startTime)} → {getTimeLabel(endTime)}</p>
               <p className="text-[--text-muted] text-xs mt-1">
                 {needsMultipleTables 
-                  ? `Tables ${selectedTables.map(t => t.number).join(', ')} • ${formData.partySize} guests`
-                  : `${selectedTable?.name} • ${formData.partySize} guest${formData.partySize !== 1 ? 's' : ''}`
+                  ? `Tables ${selectedTables.map(t => t.number).join(', ')} • ${partySize} guests`
+                  : `${selectedTable?.name} • ${partySize} guest${partySize !== 1 ? 's' : ''}`
                 }
               </p>
             </div>
@@ -552,28 +592,93 @@ export default function BookTablePage() {
 
             <div className="divider-glow w-24 mx-auto mb-6" />
             
-            <div className="space-y-4">
+            <form onSubmit={handleFormSubmit(initiatePayment)} className="space-y-4">
               <div>
                 <label className="text-[10px] text-[--text-dim] uppercase tracking-wider mb-2 block">Name *</label>
-                <input type="text" value={formData.customerName} onChange={(e) => setFormData({ ...formData, customerName: e.target.value })} placeholder="Your name" className="w-full bg-[--card] border border-[--border] rounded-xl px-4 py-3.5 text-sm" />
+                <input 
+                  type="text" 
+                  {...register("customerName", { 
+                    required: "Name is required",
+                    minLength: { value: 2, message: "Name must be at least 2 characters" },
+                    pattern: { value: /^[a-zA-Z\s]+$/, message: "Name can only contain letters" }
+                  })} 
+                  placeholder="Your name" 
+                  className={`w-full bg-[--card] border rounded-xl px-4 py-3.5 text-sm ${errors.customerName ? 'border-red-500' : 'border-[--border]'}`} 
+                />
+                {errors.customerName && (
+                  <p className="text-red-400 text-[10px] mt-1">{errors.customerName.message}</p>
+                )}
               </div>
               <div>
                 <label className="text-[10px] text-[--text-dim] uppercase tracking-wider mb-2 block">Phone *</label>
-                <input type="tel" value={formData.customerPhone} onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })} placeholder="Phone number" className="w-full bg-[--card] border border-[--border] rounded-xl px-4 py-3.5 text-sm" />
+                <div className="flex gap-2">
+                  {/* Country Code */}
+                  <select 
+                    {...register("countryCode")}
+                    className="bg-[--card] border border-[--border] rounded-xl px-3 py-3.5 text-sm w-24"
+                  >
+                    <option value="+91">🇮🇳 +91</option>
+                   
+                  </select>
+                  {/* Phone Number - only digits */}
+                  <input 
+                    type="tel"
+                    inputMode="numeric"
+                    {...register("customerPhone", { 
+                      required: "Phone number is required",
+                      pattern: { 
+                        value: /^\d{10}$/, 
+                        message: "Enter exactly 10 digits" 
+                      },
+                      onChange: (e) => {
+                        // Only allow digits
+                        e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      }
+                    })} 
+                    placeholder="10 digit number" 
+                    maxLength={10}
+                    className={`flex-1 bg-[--card] border rounded-xl px-4 py-3.5 text-sm ${errors.customerPhone ? 'border-red-500' : 'border-[--border]'}`} 
+                  />
+                </div>
+                {errors.customerPhone && (
+                  <p className="text-red-400 text-[10px] mt-1">{errors.customerPhone.message}</p>
+                )}
                 <p className="text-[--text-dim] text-[10px] mt-1.5">Used to create your account & track your deposit</p>
               </div>
               <div>
                 <label className="text-[10px] text-[--text-dim] uppercase tracking-wider mb-2 block">Notes</label>
-                <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Special requests" rows={2} className="w-full bg-[--card] border border-[--border] rounded-xl px-4 py-3.5 text-sm resize-none" />
+                <textarea 
+                  {...register("notes")} 
+                  placeholder="Special requests" 
+                  rows={2} 
+                  className="w-full bg-[--card] border border-[--border] rounded-xl px-4 py-3.5 text-sm resize-none" 
+                />
               </div>
-            </div>
+            </form>
           </div>
           <div className="p-4 border-t border-[--border] bg-[--bg]">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[--text-muted] text-sm">Total to pay now</span>
               <span className="text-[--text-primary] font-bold text-xl">₹{totalDeposit}</span>
             </div>
-            <button onClick={handleSubmit} className="btn-primary w-full py-4 rounded-xl text-sm font-medium">Pay & Confirm Booking</button>
+            <button 
+              onClick={handleFormSubmit(initiatePayment)} 
+              disabled={isProcessing}
+              className={`w-full py-4 rounded-xl text-sm font-medium transition-all ${
+                isProcessing 
+                  ? 'bg-[--border] text-[--text-dim] cursor-not-allowed' 
+                  : 'btn-primary'
+              }`}
+            >
+              {isProcessing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-[--text-dim] border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                'Pay & Confirm Booking'
+              )}
+            </button>
           </div>
         </div>
       )}

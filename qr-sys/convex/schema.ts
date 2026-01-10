@@ -36,10 +36,13 @@ export default defineSchema({
     paymentStatus: v.string(),
     notes: v.string(),
     customerSessionId: v.string(),
+    customerPhone: v.optional(v.string()),
+    depositUsed: v.optional(v.number()),
   })
     .index("by_status", ["status"])
     .index("by_customerSession", ["customerSessionId"])
-    .index("by_table", ["tableId"]),
+    .index("by_table", ["tableId"])
+    .index("by_phone", ["customerPhone"]),
 
   tables: defineTable({
     name: v.string(),
@@ -80,6 +83,7 @@ export default defineSchema({
     partySize: v.number(),
     depositAmount: v.optional(v.number()), // Deposit paid for this reservation
     status: v.string(), // 'confirmed' | 'cancelled' | 'completed'
+    arrived: v.optional(v.boolean()), // true when customer has verified and arrived
     notes: v.optional(v.string()),
   })
     .index("by_table", ["tableId"])
@@ -94,6 +98,7 @@ export default defineSchema({
     reason: v.optional(v.string()),
     status: v.string(), // 'pending' | 'acknowledged' | 'resolved'
     createdAt: v.number(),
+    acknowledgedAt: v.optional(v.number()), // When staff acknowledged
     originalStaffId: v.optional(v.id("staff")), // Original assigned staff
     reassignedTo: v.optional(v.id("staff")), // If redirected to another staff
     reassignReason: v.optional(v.string()), // Why it was reassigned

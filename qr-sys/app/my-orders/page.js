@@ -11,6 +11,8 @@ import {
   ChevronRight, Package, X, ArrowRight 
 } from "lucide-react";
 import MenuItemImage from "@/components/MenuItemImage";
+import { AnimatedPopup } from "@/components/AnimatedPopup";
+import { HandPlatter } from "lucide-react";
 
 const statusConfig = {
   pending: { label: "Received", cls: "status-pending", icon: Clock },
@@ -25,8 +27,24 @@ export default function MyOrdersPage() {
   const { setTable } = useTable();
   const [showPopup, setShowPopup] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [searchPhone, setSearchPhone] = useState("");
   
-  const orders = useQuery(api.orders.getBySession, sessionId ? { sessionId } : "skip");
+  // Check localStorage for stored phone on mount
+  useEffect(() => {
+    const storedPhone = localStorage.getItem('customerPhone');
+    if (storedPhone) {
+      setSearchPhone(storedPhone);
+    }
+  }, []);
+  
+  // Query orders by session or by phone
+  const ordersBySession = useQuery(api.orders.getBySession, sessionId ? { sessionId } : "skip");
+  const ordersByPhone = useQuery(api.orders.getByPhone, searchPhone ? { phone: searchPhone } : "skip");
+  
+  // Combine orders (prefer phone-based if available)
+  const orders = searchPhone && ordersByPhone?.length > 0 ? ordersByPhone : ordersBySession;
   const lastTableId = orders && orders.length > 0 ? orders[0].tableId : null;
 
   // Get table info for context
@@ -56,8 +74,20 @@ export default function MyOrdersPage() {
     } 
   };
 
+  const handleViewOrders = () => {
+    if (phoneNumber.length !== 10) {
+      setPhoneError("Enter 10 digit number");
+      return;
+    }
+    // Store phone in localStorage for credit lookup
+    const fullPhone = `+91${phoneNumber}`;
+    localStorage.setItem('customerPhone', fullPhone);
+    setSearchPhone(fullPhone);
+    setPhoneError("");
+  };
+
   // Loading state
-  if (orders === undefined) {
+  if (ordersBySession === undefined && ordersByPhone === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-12 h-12 spinner rounded-full" />
@@ -65,27 +95,68 @@ export default function MyOrdersPage() {
     );
   }
 
-  // Empty state
-  if (!orders || orders.length === 0) {
+  // Check if user searched by phone but no orders found
+  const searchedButNoOrders = searchPhone && ordersByPhone !== undefined && ordersByPhone?.length === 0;
+
+  // Empty state - ask for phone number or show no orders message
+  if ((!orders || orders.length === 0) && !searchedButNoOrders) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6">
-        <div className="text-center animate-scale-in">
-          <div className="w-24 h-24 bg-[--card] border border-[--border] rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Package size={36} className="text-[--primary]" />
+        <div className="text-center animate-scale-in w-full max-w-sm">
+          <div className="w-24 h-24 border border-[--border] rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <HandPlatter size={36} className="text-[--primary]" />
           </div>
           <h1 className="font-luxury text-2xl font-semibold text-[--text-primary] mb-3">
-            No Orders Yet
+            Wanna see your orders?
           </h1>
-          <p className="text-[--text-muted] text-sm mb-8">
-            Start by browsing our menu
+          <p className="text-[--text-muted] text-sm mb-6">
+            Enter your phone number to view your orders
           </p>
-          <Link 
-            href="/" 
-            className="inline-flex items-center gap-2 btn-primary px-8 py-4 rounded-xl text-sm font-semibold"
+          <div className="flex items-center bg-[--card] border border-[--border] rounded-xl overflow-hidden mb-4">
+            <span className="px-4 py-3 text-[--text-muted] text-sm border-r border-[--border]">+91</span>
+            <input
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => { setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10)); setPhoneError(''); }}
+              placeholder="10 digit number"
+              maxLength={10}
+              className="flex-1 bg-transparent px-4 py-3 text-sm outline-none"
+            />
+          </div>
+          {phoneError && <p className="text-red-400 text-xs mb-4">{phoneError}</p>}
+          <button 
+            onClick={handleViewOrders}
+            className="w-full btn-primary px-8 py-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
           >
-            <Plus size={16} />
-            Start Ordering
-          </Link>
+            View Orders
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // No orders found for this phone number
+  if (searchedButNoOrders) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="text-center animate-scale-in w-full max-w-sm">
+          <div className="w-24 h-24 border border-[--border] rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <HandPlatter size={36} className="text-[--text-muted]" />
+          </div>
+          <h1 className="font-luxury text-2xl font-semibold text-[--text-primary] mb-3">
+            No orders found
+          </h1>
+          <p className="text-[--text-muted] text-sm mb-6">
+            There are no orders with this phone number
+          </p>
+          <p className="text-[--text-dim] text-xs mb-6">{searchPhone}</p>
+          <button 
+            onClick={() => { setSearchPhone(''); setPhoneNumber(''); localStorage.removeItem('customerPhone'); }}
+            className="w-full btn-secondary px-8 py-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+          >
+            Try another number
+          </button>
         </div>
       </div>
     );
@@ -97,56 +168,58 @@ export default function MyOrdersPage() {
   return (
     <div className="min-h-screen pb-8">
       {/* New Order Popup */}
-      {showPopup && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 animate-fade-in">
-          <div className="card rounded-2xl p-6 w-full max-w-sm animate-scale-in">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-luxury text-xl font-semibold text-[--text-primary]">New Order</h2>
-              <button 
-                onClick={() => setShowPopup(false)} 
-                className="w-10 h-10 rounded-xl bg-[--bg-elevated] border border-[--border] flex items-center justify-center hover:border-[--border-light] transition-colors"
-              >
-                <X size={18} className="text-[--text-muted]" />
-              </button>
-            </div>
-            
-            <div className="divider-glow mb-6" />
-            
-            {lastTableId && (
-              <button 
-                onClick={handleSameTable} 
-                className="w-full p-5 rounded-xl border border-[--border] bg-[--card] hover:border-[--primary]/30 transition-all mb-4 text-left group"
-              >
-                <p className="text-[--text-primary] font-medium mb-1">Same Table</p>
-                <p className="text-[--text-muted] text-sm">Continue ordering at Table {lastTableId}</p>
-              </button>
-            )}
-            
-            <div className="p-5 rounded-xl border border-[--border] bg-[--card]">
-              <p className="text-[--text-primary] font-medium mb-4">Different Table</p>
-              <input 
-                type="number" 
-                value={newTableNumber} 
-                onChange={(e) => setNewTableNumber(e.target.value)} 
-                placeholder="Enter table number" 
-                className="w-full text-center text-xl font-luxury font-semibold rounded-xl py-4 px-4 mb-3 !bg-[--bg-elevated]" 
-                min="1" 
-              />
-              <button 
-                onClick={handleNewTable} 
-                disabled={!newTableNumber} 
-                className={`w-full rounded-xl py-4 text-sm flex items-center justify-center gap-2 font-semibold ${
-                  newTableNumber 
-                    ? "btn-primary" 
-                    : "bg-[--border] text-[--text-dim] cursor-not-allowed"
-                }`}
-              >
-                Continue <ArrowRight size={16} />
-              </button>
-            </div>
+      <AnimatedPopup 
+        show={showPopup} 
+        onClose={() => setShowPopup(false)}
+        className="absolute inset-0 flex items-center justify-center p-6"
+      >
+        <div className="card rounded-2xl p-6 w-full max-w-sm">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-luxury text-xl font-semibold text-[--text-primary]">New Order</h2>
+            <button 
+              onClick={() => setShowPopup(false)} 
+              className="w-10 h-10 rounded-xl bg-[--bg-elevated] border border-[--border] flex items-center justify-center hover:border-[--border-light] transition-colors"
+            >
+              <X size={18} className="text-[--text-muted]" />
+            </button>
+          </div>
+          
+          <div className="divider-glow mb-6" />
+          
+          {lastTableId && (
+            <button 
+              onClick={handleSameTable} 
+              className="w-full p-5 rounded-xl border border-[--border] bg-[--card] hover:border-[--primary]/30 transition-all mb-4 text-left group"
+            >
+              <p className="text-[--text-primary] font-medium mb-1">Same Table</p>
+              <p className="text-[--text-muted] text-sm">Continue ordering at Table {lastTableId}</p>
+            </button>
+          )}
+          
+          <div className="p-5 rounded-xl border border-[--border] bg-[--card]">
+            <p className="text-[--text-primary] font-medium mb-4">Different Table</p>
+            <input 
+              type="number" 
+              value={newTableNumber} 
+              onChange={(e) => setNewTableNumber(e.target.value)} 
+              placeholder="Enter table number" 
+              className="w-full text-center text-xl font-luxury font-semibold rounded-xl py-4 px-4 mb-3 !bg-[--bg-elevated]" 
+              min="1" 
+            />
+            <button 
+              onClick={handleNewTable} 
+              disabled={!newTableNumber} 
+              className={`w-full rounded-xl py-4 text-sm flex items-center justify-center gap-2 font-semibold ${
+                newTableNumber 
+                  ? "btn-primary" 
+                  : "bg-[--border] text-[--text-dim] cursor-not-allowed"
+              }`}
+            >
+              Continue <ArrowRight size={16} />
+            </button>
           </div>
         </div>
-      )}
+      </AnimatedPopup>
 
       {/* Header */}
       <header className="glass sticky top-0 z-10">

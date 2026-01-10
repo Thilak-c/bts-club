@@ -55,30 +55,50 @@ export const getCurrentForTable = query({
     // Find the table by number
     const tables = await ctx.db.query("tables").collect();
     const table = tables.find(t => t.number === args.tableNumber);
-    if (!table) return null;
+    if (!table) {
+      console.log('DEBUG: Table not found for number:', args.tableNumber);
+      return null;
+    }
 
-    // Get today's date in IST (UTC+5:30)
+    // Get today's date - use simple local date calculation
+    // The booking page uses: new Date().toISOString().split('T')[0] which is UTC
+    // So we should match that format
     const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    // Also check IST date in case booking was made with IST
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istNow = new Date(now.getTime() + istOffset);
-    const today = istNow.toISOString().split('T')[0];
-    const currentTime = istNow.toISOString().split('T')[1].substring(0, 5); // HH:MM
+    const todayIST = istNow.toISOString().split('T')[0];
+    
+    // Current time in HH:MM format (IST for comparison)
+    const currentTime = istNow.toISOString().split('T')[1].substring(0, 5);
+    
+    console.log('DEBUG: Looking for reservations - UTC date:', today, 'IST date:', todayIST, 'Current time:', currentTime, 'Table ID:', table._id);
 
-    // Get today's confirmed reservations for this table
+    // Get today's confirmed reservations for this table (check both UTC and IST dates)
     const reservations = await ctx.db
       .query("reservations")
       .withIndex("by_table", (q) => q.eq("tableId", table._id))
-      .filter((q) => q.eq(q.field("date"), today))
       .filter((q) => q.eq(q.field("status"), "confirmed"))
       .collect();
+    
+    console.log('DEBUG: All confirmed reservations for table:', reservations.map(r => ({ date: r.date, start: r.startTime, end: r.endTime, name: r.customerName })));
+    
+    // Filter for today's reservations (either UTC or IST date)
+    const todayReservations = reservations.filter(r => 
+      r.date === today || r.date === todayIST
+    );
+    
+    console.log('DEBUG: Today reservations:', todayReservations.length);
 
-    if (reservations.length === 0) return null;
+    if (todayReservations.length === 0) return null;
 
     // Sort by start time
-    reservations.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    todayReservations.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-    // Find current or next reservation
-    for (const res of reservations) {
+    // Find current or upcoming reservation
+    for (const res of todayReservations) {
       // If current time is within reservation window
       if (currentTime >= res.startTime && currentTime <= res.endTime) {
         return { ...res, isCurrent: true };
@@ -88,6 +108,7 @@ export const getCurrentForTable = query({
         return { ...res, isCurrent: false };
       }
     }
+    
     return null;
   },
 });
@@ -215,5 +236,14 @@ export const getTodayStats = query({
         return r.startTime > now;
       }).length,
     };
+  },
+});
+
+
+// Mark reservation as arrived (customer verified)
+export const markArrived = mutation({
+  args: { id: v.id("reservations") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { arrived: true });
   },
 });

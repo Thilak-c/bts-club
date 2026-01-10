@@ -2,16 +2,16 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCart } from "@/lib/cart";
 import { useTable } from "@/lib/table";
 import { 
   ShoppingBag, Plus, Minus, ArrowLeft, Armchair, 
-  UtensilsCrossed, Search, X, Phone, Lock
+  UtensilsCrossed, Search, X, Phone, Lock, GlassWater
 } from "lucide-react";
 import MenuItemImage from "@/components/MenuItemImage";
-import { isRestaurantOpen } from "@/components/ClosedPopup";
+import { AnimatedBottomSheet, AnimatedToast, AnimatedPopup, AnimatedOverlay } from "@/components/AnimatedPopup";
 
 // Format 24h time to 12h format
 const formatTime = (time) => {
@@ -38,7 +38,7 @@ export default function MenuPage() {
   const { setTable } = useTable();
   const [activeCategory, setActiveCategory] = useState("All");
   const [dismissedReservation, setDismissedReservation] = useState(false);
-  const [dismissedClosed, setDismissedClosed] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [unavailablePopup, setUnavailablePopup] = useState(null);
@@ -48,21 +48,32 @@ export default function MenuPage() {
   const [verifyStep, setVerifyStep] = useState('ask'); // 'ask' | 'phone' | 'verified' | 'denied'
   const [phoneInput, setPhoneInput] = useState('');
   const [verifyError, setVerifyError] = useState('');
+  
+  // Welcome & water popup states
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeName, setWelcomeName] = useState('');
+  const [showWaterPopup, setShowWaterPopup] = useState(false);
+  const [showWaterOnWay, setShowWaterOnWay] = useState(false);
 
   const table = useQuery(api.tables.getByNumber, { number: parseInt(tableId) });
   const menuItems = useQuery(api.menuItems.listForZone, table !== undefined ? { zoneId: table?.zoneId } : "skip");
   const reservation = useQuery(api.reservations.getCurrentForTable, { tableNumber: parseInt(tableId) });
+  const waterAcknowledged = useQuery(api.staffCalls.getWaterAcknowledged, { tableNumber: parseInt(tableId) });
+  const createNotification = useMutation(api.staffNotifications.create);
+  const createStaffCall = useMutation(api.staffCalls.create);
+  const markArrived = useMutation(api.reservations.markArrived);
 
-  // Check if already verified for this table in session
+  // Set table context for call staff button
   useEffect(() => {
     const verified = sessionStorage.getItem(`table-${tableId}-verified`);
     if (verified) {
       setVerifyStep('verified');
       setDismissedReservation(true);
     }
+    setIsHydrated(true);
   }, [tableId]);
 
-  // Set table context for call staff button
+  // Set table context
   useEffect(() => {
     if (tableId) {
       setTable({
@@ -73,13 +84,35 @@ export default function MenuPage() {
     }
   }, [tableId, table?.zone?.name]);
 
-  // Check if dismissed closed popup in session
+  // Show "Water on the way" popup when staff acknowledges
   useEffect(() => {
-    const wasDismissed = sessionStorage.getItem('closed-popup-dismissed');
-    if (wasDismissed) setDismissedClosed(true);
-  }, []);
+    if (waterAcknowledged) {
+      // Check if we already showed this acknowledgment
+      const seenAcks = JSON.parse(sessionStorage.getItem('seenWaterAcks') || '[]');
+      if (!seenAcks.includes(waterAcknowledged._id)) {
+        setShowWaterOnWay(true);
+        // Mark as seen
+        seenAcks.push(waterAcknowledged._id);
+        sessionStorage.setItem('seenWaterAcks', JSON.stringify(seenAcks));
+        // Auto-hide after 4 seconds
+        setTimeout(() => setShowWaterOnWay(false), 4000);
+      }
+    }
+  }, [waterAcknowledged]);
 
-  // Full screen closed alert (before reservation check)
+  // Don't show popups until hydrated (sessionStorage checked)
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 spinner rounded-full mx-auto mb-4" />
+        </div>
+      </div>
+    );
+  }
+
+  // Full screen closed alert (before reservation check) - COMMENTED OUT FOR NOW
+  /*
   if (!isRestaurantOpen() && !dismissedClosed) {
     const handleDismissClosed = () => {
       setDismissedClosed(true);
@@ -152,19 +185,46 @@ export default function MenuPage() {
       </div>
     );
   }
+  */
 
-  // Full screen reservation alert with verification
-  if (reservation && !dismissedReservation) {
+  // Full screen reservation alert with verification - for current AND upcoming reservations
+  // Skip if customer already arrived (verified from any device)
+  if (reservation && !dismissedReservation && !reservation.arrived) {
     // Handle phone verification
-    const handleVerifyPhone = () => {
-      const cleanPhone = phoneInput.replace(/\D/g, '');
-      const reservationPhone = reservation.customerPhone?.replace(/\D/g, '') || '';
+    const handleVerifyPhone = async () => {
+      const cleanPhone = phoneInput.replace(/\D/g, ''); // User enters 10 digits
+      const reservationPhone = reservation.customerPhone?.replace(/\D/g, '') || ''; // DB has 91XXXXXXXXXX
       
-      if (cleanPhone === reservationPhone || cleanPhone.endsWith(reservationPhone) || reservationPhone.endsWith(cleanPhone)) {
+      // Compare: user enters 10 digits, DB has 12 digits (91 + 10)
+      // So check if reservation phone ends with user input
+      if (reservationPhone.endsWith(cleanPhone) && cleanPhone.length === 10) {
         // Phone matches - allow access
         setVerifyStep('verified');
         setDismissedReservation(true);
         sessionStorage.setItem(`table-${tableId}-verified`, 'true');
+        
+        // Show welcome screen
+        setWelcomeName(reservation.customerName);
+        setShowWelcome(true);
+        
+        // After 2 seconds, hide welcome and show water popup after a delay
+        setTimeout(() => {
+          setShowWelcome(false);
+          // Show water popup after 5 more seconds
+          setTimeout(() => {
+            setShowWaterPopup(true);
+          }, 5000);
+        }, 2000);
+        
+        // Mark reservation as arrived in database
+        await markArrived({ id: reservation._id });
+        
+        // Notify staff that customer has arrived
+        await createNotification({
+          type: 'customer_arrived',
+          message: `${reservation.customerName} arrived at Table ${tableId}`,
+        });
+        
         // Store customer info
         localStorage.setItem('customerPhone', reservation.customerPhone);
         localStorage.setItem('customerName', reservation.customerName);
@@ -245,14 +305,18 @@ export default function MenuPage() {
 
               <div className="w-full max-w-xs space-y-4 opacity-0 animate-slide-up" style={{animationDelay: '0.2s', animationFillMode: 'forwards'}}>
                 <div>
-                  <input
-                    type="tel"
-                    value={phoneInput}
-                    onChange={(e) => { setPhoneInput(e.target.value); setVerifyError(''); }}
-                    placeholder="Phone number"
-                    className="w-full bg-[--card] border border-[--border] rounded-xl px-4 py-4 text-center text-lg tracking-wider"
-                    autoFocus
-                  />
+                  <div className="flex items-center bg-[--card] border border-[--border] rounded-xl overflow-hidden">
+                    <span className="px-3 py-4 text-[--text-muted] text-lg border-r border-[--border]">+91</span>
+                    <input
+                      type="tel"
+                      value={phoneInput}
+                      onChange={(e) => { setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10)); setVerifyError(''); }}
+                      placeholder="10 digit number"
+                      maxLength={10}
+                      className="flex-1 bg-transparent px-4 py-4 text-center text-lg tracking-wider outline-none"
+                      autoFocus
+                    />
+                  </div>
                   {verifyError && (
                     <p className="text-red-400 text-xs text-center mt-2">{verifyError}</p>
                   )}
@@ -535,33 +599,85 @@ export default function MenuPage() {
       )}
 
       {/* Unavailable Item Popup */}
-      {unavailablePopup && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4" 
-          onClick={() => setUnavailablePopup(null)}
-        >
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div 
-            className="relative card rounded-xl p-5 max-w-[260px] w-full animate-scale-in text-center"
-            onClick={(e) => e.stopPropagation()}
-            style={{animationFillMode: 'forwards'}}
+      <AnimatedPopup 
+        show={!!unavailablePopup} 
+        onClose={() => setUnavailablePopup(null)}
+        className="absolute inset-0 flex items-center justify-center p-4"
+      >
+        <div className="card rounded-xl p-5 max-w-[260px] w-full text-center">
+          <h3 className="text-[--text-primary] font-luxury text-base mb-2">
+            Not Available
+          </h3>
+          <p className="text-[--primary] font-medium text-sm mb-1">{unavailablePopup?.name}</p>
+          <p className="text-[--text-muted] text-xs mb-5">
+            Not available in {table?.zone?.name || 'this zone'}
+          </p>
+          <button 
+            onClick={() => setUnavailablePopup(null)}
+            className="w-full btn-secondary py-2.5 rounded-lg text-xs font-semibold"
           >
-            <h3 className="text-[--text-primary] font-luxury text-base mb-2">
-              Not Available
-            </h3>
-            <p className="text-[--primary] font-medium text-sm mb-1">{unavailablePopup.name}</p>
-            <p className="text-[--text-muted] text-xs mb-5">
-              Not available in {table?.zone?.name || 'this zone'}
-            </p>
+            Got it
+          </button>
+        </div>
+      </AnimatedPopup>
+
+      {/* Welcome Overlay */}
+      <AnimatedOverlay show={showWelcome} className="flex items-center justify-center bg-[--bg]">
+        <div className="text-center">
+          <p className="text-[--text-dim] text-xs uppercase tracking-[0.3em] mb-4">Welcome</p>
+          <h1 className="text-4xl font-luxury font-semibold text-[--text-primary] mb-2">{welcomeName}</h1>
+          <p className="text-[--text-muted] text-sm">Enjoy your time at BTS DISC</p>
+        </div>
+      </AnimatedOverlay>
+
+      {/* Water Popup - slides up from bottom */}
+      <AnimatedBottomSheet show={showWaterPopup} onClose={() => setShowWaterPopup(false)}>
+        <div className="text-center">
+          <div className="w-14 h-14 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
+            <GlassWater size={28} className="text-blue-400" />
+          </div>
+          <h3 className="text-[--text-primary] font-luxury text-lg mb-2">Want some water?</h3>
+          <p className="text-[--text-muted] text-sm mb-5">We'll bring it right over</p>
+          <div className="flex gap-3">
             <button 
-              onClick={() => setUnavailablePopup(null)}
-              className="w-full btn-secondary py-2.5 rounded-lg text-xs font-semibold"
+              onClick={() => setShowWaterPopup(false)}
+              className="flex-1 btn-secondary py-3 rounded-xl text-sm font-medium"
             >
-              Got it
+              No thanks
+            </button>
+            <button 
+              onClick={async () => {
+                await createStaffCall({
+                  tableId: String(tableId),
+                  tableNumber: parseInt(tableId),
+                  zoneName: table?.zone?.name,
+                  reason: 'Asking for water',
+                });
+                setShowWaterPopup(false);
+              }}
+              className="flex-1 btn-primary py-3 rounded-xl text-sm font-medium"
+            >
+              Yes please
             </button>
           </div>
         </div>
-      )}
+      </AnimatedBottomSheet>
+
+      {/* Water On The Way Toast */}
+      <AnimatedToast show={showWaterOnWay} onClose={() => setShowWaterOnWay(false)}>
+        <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+            <GlassWater size={20} className="text-emerald-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-emerald-400 font-semibold text-sm">Water on the way!</p>
+            <p className="text-emerald-400/70 text-xs">Staff is bringing it to you</p>
+          </div>
+          <button onClick={() => setShowWaterOnWay(false)} className="text-emerald-400/50">
+            <X size={18} />
+          </button>
+        </div>
+      </AnimatedToast>
     </div>
   );
 }

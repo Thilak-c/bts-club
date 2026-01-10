@@ -95,6 +95,46 @@ export const updateStatus = mutation({
     status: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { status: args.status });
+    const call = await ctx.db.get(args.id);
+    if (!call) return;
+    
+    // If resolving a water request that wasn't acknowledged yet, acknowledge it first
+    if (args.status === 'resolved' && call.reason === 'Asking for water' && !call.acknowledgedAt) {
+      await ctx.db.patch(args.id, { 
+        status: args.status,
+        acknowledgedAt: Date.now(),
+      });
+    }
+    // If acknowledging a water request, store the timestamp
+    else if (args.status === 'acknowledged' && call.reason === 'Asking for water') {
+      await ctx.db.patch(args.id, { 
+        status: args.status,
+        acknowledgedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.patch(args.id, { status: args.status });
+    }
+  },
+});
+
+
+// Get recent acknowledged water request for a table (for customer notification)
+export const getWaterAcknowledged = query({
+  args: { tableNumber: v.number() },
+  handler: async (ctx, args) => {
+    const calls = await ctx.db
+      .query("staffCalls")
+      .collect();
+    
+    // Find water request for this table with acknowledgedAt in last 5 minutes
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const waterCall = calls.find(c => 
+      c.tableNumber === args.tableNumber && 
+      c.reason === 'Asking for water' &&
+      c.acknowledgedAt &&
+      c.acknowledgedAt > fiveMinutesAgo
+    );
+    
+    return waterCall || null;
   },
 });

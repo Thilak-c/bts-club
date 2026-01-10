@@ -19,6 +19,17 @@ export const getBySession = query({
   },
 });
 
+export const getByPhone = query({
+  args: { phone: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("orders")
+      .withIndex("by_phone", (q) => q.eq("customerPhone", args.phone))
+      .order("desc")
+      .collect();
+  },
+});
+
 export const getActiveBySession = query({
   args: { sessionId: v.string() },
   handler: async (ctx, args) => {
@@ -89,6 +100,8 @@ export const create = mutation({
     paymentMethod: v.string(),
     notes: v.string(),
     customerSessionId: v.string(),
+    customerPhone: v.optional(v.string()),
+    depositUsed: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Count existing orders for this table to generate order number
@@ -103,6 +116,30 @@ export const create = mutation({
     const tableNum = args.tableId.padStart(2, '0');
     const orderNum = orderCount.toString().padStart(2, '0');
     const orderNumber = `${tableNum}${orderNum}`;
+
+    // If deposit was used, deduct from customer's balance immediately
+    if (args.depositUsed && args.depositUsed > 0 && args.customerPhone) {
+      console.log("Deducting deposit:", args.depositUsed, "from phone:", args.customerPhone);
+      const customer = await ctx.db
+        .query("customers")
+        .withIndex("by_phone", (q) => q.eq("phone", args.customerPhone))
+        .first();
+      
+      console.log("Found customer:", customer);
+      
+      if (customer) {
+        const newBalance = Math.max(0, customer.depositBalance - args.depositUsed);
+        console.log("Old balance:", customer.depositBalance, "New balance:", newBalance);
+        await ctx.db.patch(customer._id, { 
+          depositBalance: newBalance,
+          lastVisit: Date.now(),
+          totalVisits: customer.totalVisits + 1,
+          totalSpent: customer.totalSpent + args.total,
+        });
+      }
+    } else {
+      console.log("No deposit to deduct. depositUsed:", args.depositUsed, "customerPhone:", args.customerPhone);
+    }
 
     return await ctx.db.insert("orders", {
       ...args,

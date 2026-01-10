@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { 
   CheckCircle, ChefHat, Truck, Clock, ArrowLeft, 
-  CreditCard, Banknote, UserRound 
+  CreditCard, Banknote, UserRound, RefreshCw 
 } from "lucide-react";
 import MenuItemImage from "@/components/MenuItemImage";
 
@@ -81,9 +81,19 @@ export default function OrderStatusPage() {
       <div className="max-w-lg mx-auto px-5 py-8">
         {/* Current Status Hero */}
         <div className="text-center mb-10 animate-scale-in">
-          <div className={`w-24 h-24 mx-auto mb-5 rounded-2xl flex items-center justify-center ${currentStatus.cls} animate-glow`}>
-            <currentStatus.icon size={40} />
-          </div>
+          {order.status === "pending" ? (
+            <img src="/cooking.gif" alt="Cooking" className="w-32 h-32 mx-auto mb-5" />
+          ) : order.status === "preparing" ? (
+            <img src="/prepare-food.gif" alt="Preparing" className="w-32 h-32 mx-auto mb-5" />
+          ) : order.status === "ready" ? (
+            <img src="/pickup-order.gif" alt="Ready" className="w-32 h-32 mx-auto mb-5" />
+          ) : order.status === "completed" ? (
+            <img src="/food-delivered.gif" alt="Completed" className="w-32 h-32 mx-auto mb-5" />
+          ) : (
+            <div className={`w-24 h-24 mx-auto mb-5 rounded-2xl flex items-center justify-center ${currentStatus.cls} animate-glow`}>
+              <currentStatus.icon size={40} />
+            </div>
+          )}
           <h2 className="font-luxury text-2xl font-semibold text-[--text-primary] mb-2">
             {currentStatus.label}
           </h2>
@@ -95,53 +105,95 @@ export default function OrderStatusPage() {
           )}
         </div>
 
-        {/* Progress Steps */}
-        <div className="card rounded-xl p-6 mb-6 animate-slide-up">
+        {/* Progress Steps - Clean Timeline */}
+        <div className="card rounded-2xl p-6 mb-6 animate-slide-up">
           <div className="relative">
             {statusSteps.map((step, index) => {
               const Icon = step.icon;
               const isActive = index <= currentStepIndex;
               const isCurrent = index === currentStepIndex;
               const isLast = index === statusSteps.length - 1;
+              const isPast = index < currentStepIndex;
               
               return (
-                <div key={step.key} className="flex items-start gap-4 relative">
+                <div 
+                  key={step.key} 
+                  className="flex items-start gap-4 relative"
+                  style={{
+                    opacity: 0,
+                    animation: `fadeSlide 0.4s ease-out ${index * 0.1}s forwards`
+                  }}
+                >
                   {/* Connector line */}
                   {!isLast && (
-                    <div 
-                      className={`absolute left-5 top-10 w-0.5 h-10 transition-colors duration-500 ${
-                        index < currentStepIndex ? 'bg-[--primary]' : 'bg-[--border]'
-                      }`} 
-                    />
+                    <div className="absolute left-5 top-12 w-px h-10">
+                      <div className="absolute inset-0 bg-[--border]" />
+                      <div 
+                        className="absolute top-0 left-0 w-full bg-[--primary] transition-all duration-500"
+                        style={{ height: isPast ? '100%' : '0%' }}
+                      />
+                    </div>
                   )}
                   
                   {/* Step icon */}
-                  <div 
-                    className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
-                      isActive ? step.cls : 'bg-[--card] border border-[--border]'
-                    }`}
-                  >
-                    <Icon size={18} className={isActive ? '' : 'text-[--text-dim]'} />
+                  <div className="relative flex-shrink-0">
+                    {isCurrent && !isCompleted && (
+                      <div 
+                        className="absolute inset-0 rounded-xl border border-[--primary] opacity-0"
+                        style={{ animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite' }}
+                      />
+                    )}
+                    
+                    <div 
+                      className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-[--primary]/10 border border-[--primary]/30' 
+                          : 'bg-[--card] border border-[--border]'
+                      }`}
+                    >
+                      <Icon 
+                        size={18} 
+                        className={`transition-colors ${isActive ? 'text-[--primary]' : 'text-[--text-dim]'}`}
+                      />
+                    </div>
                   </div>
                   
-                  {/* Step label */}
-                  <div className={`pb-8 ${isLast ? "pb-0" : ""}`}>
+                  {/* Step content */}
+                  <div className={`flex-1 pt-2 ${isLast ? "pb-0" : "pb-8"}`}>
                     <p className={`text-sm font-medium transition-colors ${
                       isActive ? "text-[--text-primary]" : "text-[--text-dim]"
                     }`}>
                       {step.label}
                     </p>
+                    
                     {isCurrent && !isCompleted && (
-                      <span className="inline-flex items-center gap-2 text-xs mt-1 text-[--primary]">
-                        <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[--primary]" />
-                        In Progress
-                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[--primary] opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[--primary]" />
+                        </span>
+                        <span className="text-xs text-[--text-muted]">In Progress</span>
+                      </div>
+                    )}
+                    
+                    {isPast && (
+                      <p className="text-xs text-[--text-dim] mt-0.5">✓</p>
                     )}
                   </div>
                 </div>
               );
             })}
           </div>
+          
+          <style jsx>{`
+            @keyframes fadeSlide {
+              from { opacity: 0; transform: translateX(-10px); }
+              to { opacity: 1; transform: translateX(0); }
+            }
+            @keyframes ping {
+              75%, 100% { transform: scale(1.3); opacity: 0; }
+            }
+          `}</style>
         </div>
 
         {/* Order Summary */}
@@ -210,8 +262,9 @@ export default function OrderStatusPage() {
         {/* Live update notice */}
         {!isCompleted && (
           <div className="mt-6 p-4 bg-[--primary]/5 border border-[--primary]/20 rounded-xl text-center animate-fade-in delay-300" style={{animationFillMode: 'forwards'}}>
-            <p className="text-xs text-[--primary]">
-              🔄 Live updates enabled • Sit back and relax
+            <p className="text-xs text-[--primary] flex items-center justify-center gap-2">
+              <RefreshCw size={14} className="animate-spin" />
+              Live updates enabled • Sit back and relax
             </p>
           </div>
         )}

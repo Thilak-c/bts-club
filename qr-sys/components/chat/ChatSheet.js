@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { X, Send } from "lucide-react";
 import { useChat } from "@/lib/chat";
 import ChatMessage from "./ChatMessage";
@@ -16,6 +16,19 @@ export default function ChatSheet() {
   } = useChat();
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      requestAnimationFrame(() => setIsAnimating(true));
+    } else {
+      setIsAnimating(false);
+      const timer = setTimeout(() => setShouldRender(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,18 +49,18 @@ export default function ChatSheet() {
     }
   };
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
         onClick={closeChat}
       />
 
       {/* Sheet */}
-      <div className="relative bg-[--bg] rounded-t-2xl max-h-[70vh] flex flex-col animate-slide-up border-t border-[--border]">
+      <div className={`relative bg-[--bg] rounded-t-2xl max-h-[70vh] flex flex-col border-t border-[--border] transition-transform duration-300 ease-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[--border]">
           <div>

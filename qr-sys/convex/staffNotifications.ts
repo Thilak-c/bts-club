@@ -76,3 +76,24 @@ export const markAllReadForStaff = mutation({
     }
   },
 });
+
+
+// Create a notification (for customer arrival, etc.)
+export const create = mutation({
+  args: {
+    type: v.string(),
+    message: v.string(),
+    staffId: v.optional(v.id("staff")),
+    relatedCallId: v.optional(v.id("staffCalls")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("staffNotifications", {
+      type: args.type,
+      message: args.message,
+      staffId: args.staffId,
+      relatedCallId: args.relatedCallId,
+      read: false,
+      createdAt: Date.now(),
+    });
+  },
+});
