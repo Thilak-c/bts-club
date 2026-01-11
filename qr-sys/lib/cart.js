@@ -1,10 +1,34 @@
 "use client";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 
 const CartContext = createContext();
 
+const CART_STORAGE_KEY = 'bts-cart';
+
 export function CartProvider({ children }) {
   const [cart, setCart] = useState([]);
+  const [hideCartBar, setHideCartBar] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(CART_STORAGE_KEY);
+    if (stored) {
+      try {
+        setCart(JSON.parse(stored));
+      } catch (e) {
+        console.error('Failed to parse cart from localStorage');
+      }
+    }
+    setIsHydrated(true);
+  }, []);
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    }
+  }, [cart, isHydrated]);
 
   const addToCart = (item) => {
     setCart((prev) => {
@@ -32,7 +56,10 @@ export function CartProvider({ children }) {
     );
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+    localStorage.removeItem(CART_STORAGE_KEY);
+  };
 
   const cartTotal = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
@@ -47,6 +74,8 @@ export function CartProvider({ children }) {
         clearCart,
         cartTotal,
         cartCount,
+        hideCartBar,
+        setHideCartBar,
       }}
     >
       {children}

@@ -1,0 +1,31 @@
+VEGETARIAN
+Corn Palak,249
+Mushroom Do Pyaza,279
+Mushroom Kadahi,299
+Mushroom Handi,299
+Mushroom Tikka Masala,279
+Mushroom Masala,299
+Mushroom Butter Masala,349
+
+NON-VEGETARIAN
+Chicken Kadahi,349
+Chicken D Pyaza,339
+Chicken Curry,299
+Chicken Dhati,349
+Chicken Butter Masala,359
+Chicken Tikka Butter Masala,359
+Chicken Handi,339
+Murg Musallam,499
+Chicken Noorani,359
+Chicken Tikka Patiala,349
+Chicken Rara,349
+Chicken Bharta,320
+Chicken Kassa,299
+Egg Curry,199
+Egg Do Pyaza,199
+Mutton Rogan Juice,399
+Mutton Masala,449
+Mutton Curry,379
+Mutton Kadahi,379
+Mutton Do Pyaza,389
+Mutton Istu,389

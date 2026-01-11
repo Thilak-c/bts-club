@@ -74,7 +74,7 @@ export function AnimatedBottomSheet({ show, onClose, children, maxHeight = '30vh
 }
 
 // Toast notification with slide animation
-export function AnimatedToast({ show, onClose, children, className = '' }) {
+export function AnimatedToast({ show, onClose, children, className = '', bottomClass = 'bottom-4' }) {
   const [shouldRender, setShouldRender] = useState(show);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -93,7 +93,7 @@ export function AnimatedToast({ show, onClose, children, className = '' }) {
 
   return (
     <div 
-      className={`fixed bottom-4 left-4 right-4 z-50 transition-all duration-300 ${isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'} ${className}`}
+      className={`fixed ${bottomClass} left-4 right-4 z-50 transition-all duration-300 ${isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'} ${className}`}
       onClick={onClose}
     >
       {children}

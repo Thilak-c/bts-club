@@ -132,7 +132,8 @@ export const getWaterAcknowledged = query({
       c.tableNumber === args.tableNumber && 
       c.reason === 'Asking for water' &&
       c.acknowledgedAt &&
-      c.acknowledgedAt > fiveMinutesAgo
+      c.acknowledgedAt > fiveMinutesAgo &&
+      (c.status === 'acknowledged' || c.status === 'resolved')
     );
     
     return waterCall || null;

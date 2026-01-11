@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Script from "next/script";
@@ -14,6 +14,45 @@ import {
   ChevronRight, Ticket, MessageSquare, X, Check
 } from "lucide-react";
 import MenuItemImage from "@/components/MenuItemImage";
+
+// Confetti function
+const createConfetti = () => {
+  const colors = ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3'];
+  const confettiCount = 50;
+  
+  for (let i = 0; i < confettiCount; i++) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    confetti.style.left = window.innerWidth / 2 + 'px';
+    confetti.style.top = window.innerHeight / 2 + 'px';
+    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+    document.body.appendChild(confetti);
+    
+    const angle = (Math.PI * 2 * i) / confettiCount;
+    const velocity = 5 + Math.random() * 5;
+    let x = window.innerWidth / 2;
+    let y = window.innerHeight / 2;
+    let velX = Math.cos(angle) * velocity;
+    let velY = Math.sin(angle) * velocity - 3;
+    
+    const animate = () => {
+      x += velX;
+      y += velY;
+      velY += 0.1;
+      confetti.style.left = x + 'px';
+      confetti.style.top = y + 'px';
+      confetti.style.opacity = Math.max(0, 1 - (y - window.innerHeight / 2) / 300);
+      
+      if (y < window.innerHeight + 100) {
+        requestAnimationFrame(animate);
+      } else {
+        confetti.remove();
+      }
+    };
+    animate();
+  }
+};
 
 const paymentOptions = [
   { id: "pay-now", label: "Pay Now", icon: CreditCard, desc: "Online payment" },
@@ -75,6 +114,19 @@ export default function CartPage() {
     setCouponError("");
     setShowCouponInput(false);
   };
+
+  // Trigger confetti when credit is found
+  const hasTriggeredConfetti = useRef(false);
+  useEffect(() => {
+    if (couponApplied && depositBalance > 0 && !hasTriggeredConfetti.current) {
+      hasTriggeredConfetti.current = true;
+      createConfetti();
+      // Happy vibration pattern - like a celebration!
+      if (navigator.vibrate) {
+        navigator.vibrate([50, 30, 50, 30, 100, 50, 150]);
+      }
+    }
+  }, [couponApplied, depositBalance]);
 
   const handleRemoveCoupon = () => {
     setCouponApplied(false);

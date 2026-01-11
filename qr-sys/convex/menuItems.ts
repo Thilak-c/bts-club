@@ -22,10 +22,22 @@ export const listForZone = query({
   handler: async (ctx, args) => {
     const items = await ctx.db.query("menuItems").collect();
     const availableItems = items.filter((item) => item.available);
+    
+    // Get all zones to map IDs to names
+    const zones = await ctx.db.query("zones").collect();
+    const zoneMap = new Map(zones.map(z => [z._id, z.name]));
 
     return availableItems.map((item) => {
       let isAvailableInZone = true;
       let restrictionMessage = "";
+      let allowedZoneNames: string[] = [];
+
+      // If item has specific zones set (not empty), get their names
+      if (item.allowedZones && item.allowedZones.length > 0) {
+        allowedZoneNames = item.allowedZones
+          .map(zoneId => zoneMap.get(zoneId))
+          .filter((name): name is string => !!name);
+      }
 
       // If table has a zone assigned, check if item is allowed in that zone
       if (args.zoneId) {
@@ -43,6 +55,7 @@ export const listForZone = query({
         ...item,
         isAvailableInZone,
         restrictionMessage,
+        allowedZoneNames,
       };
     });
   },

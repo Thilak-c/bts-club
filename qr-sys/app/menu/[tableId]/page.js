@@ -42,7 +42,8 @@ export default function MenuPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [unavailablePopup, setUnavailablePopup] = useState(null);
-  const { cart, addToCart, updateQuantity, cartCount, cartTotal } = useCart();
+  const [showAddedGif, setShowAddedGif] = useState(false);
+  const { cart, addToCart, updateQuantity, cartCount, cartTotal, hideCartBar } = useCart();
   
   // Reservation verification states
   const [verifyStep, setVerifyStep] = useState('ask'); // 'ask' | 'phone' | 'verified' | 'denied'
@@ -53,12 +54,10 @@ export default function MenuPage() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeName, setWelcomeName] = useState('');
   const [showWaterPopup, setShowWaterPopup] = useState(false);
-  const [showWaterOnWay, setShowWaterOnWay] = useState(false);
 
   const table = useQuery(api.tables.getByNumber, { number: parseInt(tableId) });
   const menuItems = useQuery(api.menuItems.listForZone, table !== undefined ? { zoneId: table?.zoneId } : "skip");
   const reservation = useQuery(api.reservations.getCurrentForTable, { tableNumber: parseInt(tableId) });
-  const waterAcknowledged = useQuery(api.staffCalls.getWaterAcknowledged, { tableNumber: parseInt(tableId) });
   const createNotification = useMutation(api.staffNotifications.create);
   const createStaffCall = useMutation(api.staffCalls.create);
   const markArrived = useMutation(api.reservations.markArrived);
@@ -84,29 +83,11 @@ export default function MenuPage() {
     }
   }, [tableId, table?.zone?.name]);
 
-  // Show "Water on the way" popup when staff acknowledges
-  useEffect(() => {
-    if (waterAcknowledged) {
-      // Check if we already showed this acknowledgment
-      const seenAcks = JSON.parse(sessionStorage.getItem('seenWaterAcks') || '[]');
-      if (!seenAcks.includes(waterAcknowledged._id)) {
-        setShowWaterOnWay(true);
-        // Mark as seen
-        seenAcks.push(waterAcknowledged._id);
-        sessionStorage.setItem('seenWaterAcks', JSON.stringify(seenAcks));
-        // Auto-hide after 4 seconds
-        setTimeout(() => setShowWaterOnWay(false), 4000);
-      }
-    }
-  }, [waterAcknowledged]);
-
   // Don't show popups until hydrated (sessionStorage checked)
   if (!isHydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 spinner rounded-full mx-auto mb-4" />
-        </div>
+        <div className="loader"></div>
       </div>
     );
   }
@@ -376,7 +357,7 @@ export default function MenuPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 spinner rounded-full mx-auto mb-4" />
+          <div className="loader mx-auto mb-4"></div>
           <p className="text-[--text-muted] text-sm">Loading menu...</p>
         </div>
       </div>
@@ -396,12 +377,34 @@ export default function MenuPage() {
   }
 
   const getItemQuantity = (menuItemId) => cart.find((i) => i.menuItemId === menuItemId)?.quantity || 0;
-  const handleAddToCart = (item) => addToCart({ 
-    menuItemId: item._id, 
-    name: item.name, 
-    price: item.price, 
-    image: item.image 
-  });
+  
+  const triggerAddedGif = () => {
+    setShowAddedGif(true);
+    // Vibrate if supported
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+    setTimeout(() => setShowAddedGif(false), 1500);
+  };
+  
+  const handleAddToCart = (item) => {
+    addToCart({ 
+      menuItemId: item._id, 
+      name: item.name, 
+      price: item.price, 
+      image: item.image 
+    });
+    triggerAddedGif();
+  };
+  
+  const handleUpdateQuantity = (menuItemId, newQty) => {
+    const oldQty = getItemQuantity(menuItemId);
+    updateQuantity(menuItemId, newQty);
+    // Only show gif when increasing quantity
+    if (newQty > oldQty) {
+      triggerAddedGif();
+    }
+  };
 
   // Group items by category for "All" view
   const groupedItems = activeCategory === "All" 
@@ -523,7 +526,7 @@ export default function MenuPage() {
                       item={item} 
                       qty={getItemQuantity(item._id)}
                       onAdd={() => handleAddToCart(item)}
-                      onUpdate={(newQty) => updateQuantity(item._id, newQty)}
+                      onUpdate={(newQty) => handleUpdateQuantity(item._id, newQty)}
                       onUnavailable={() => setUnavailablePopup(item)}
                     />
                   ))}
@@ -540,7 +543,7 @@ export default function MenuPage() {
                 item={item} 
                 qty={getItemQuantity(item._id)}
                 onAdd={() => handleAddToCart(item)}
-                onUpdate={(newQty) => updateQuantity(item._id, newQty)}
+                onUpdate={(newQty) => handleUpdateQuantity(item._id, newQty)}
                 onUnavailable={() => setUnavailablePopup(item)}
               />
             ))}
@@ -567,35 +570,86 @@ export default function MenuPage() {
       </div>
 
       {/* Cart Bar */}
-      {cartCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-3 pb-4">
-          <div className="max-w-lg mx-auto">
-            <Link 
-              href={`/cart/${tableId}`}
-              className="flex items-center justify-between card rounded-xl px-4 py-3 animate-slide-up group"
-              style={{animationFillMode: 'forwards'}}
-            >
-              {/* Left side - count & total */}
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[--primary]/10 border border-[--primary]/20 flex items-center justify-center">
-                  <span className="text-[--primary] font-luxury text-sm font-semibold">{cartCount}</span>
-                </div>
-                <div>
-                  <p className="text-[--text-primary] text-xs font-medium">View Cart</p>
-                  <p className="text-[--text-dim] text-[10px]">{cartCount} item{cartCount !== 1 ? 's' : ''}</p>
-                </div>
-              </div>
-              
-              {/* Right side - total & arrow */}
-              <div className="flex items-center gap-2">
-                <span className="price-tag text-base">₹{cartTotal.toFixed(0)}</span>
-                <div className="w-7 h-7 rounded-md bg-[--primary] flex items-center justify-center transition-transform group-hover:translate-x-0.5">
-                  <ShoppingBag size={12} className="text-[--bg]" />
-                </div>
-              </div>
-            </Link>
-          </div>
+      {cartCount > 0 && !hideCartBar && (
+      <div className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-5">
+  <div className="max-w-lg mx-auto">
+    <Link
+      href={`/cart/${tableId}`}
+      className="
+        relative overflow-hidden
+        flex items-center justify-between
+        rounded-2xl px-4 py-3
+        border border-white/10
+        bg-white/5 backdrop-blur-xl
+        shadow-[0_10px_30px_rgba(0,0,0,0.35)]
+        active:scale-[0.985]
+        transition-all duration-200
+        group
+      "
+    >
+      {/* Glow gradient */}
+      <div
+        className="
+          absolute inset-0 opacity-0 group-hover:opacity-100
+          transition-opacity duration-300
+          bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.18),transparent_55%)]
+        "
+      />
+
+      {/* Animated shine */}
+      <div
+        className="
+          absolute -left-10 top-0 h-full w-24
+          bg-white/10 blur-xl rotate-12
+          translate-x-[-120%]
+          group-hover:translate-x-[450%]
+          transition-transform duration-700
+        "
+      />
+
+      {/* Left */}
+      <div className="relative flex items-center gap-3">
+        <div
+          className="
+            w-10 h-10 rounded-xl
+            bg-[--primary]/15 border border-[--primary]/25
+            flex items-center justify-center
+            shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]
+            overflow-hidden
+          "
+        >
+          {showAddedGif ? (
+            <img src="/added.gif" alt="Added" className="" />
+          ) : (
+            <span className="text-[--primary] font-semibold text-sm">
+              {cartCount}
+            </span>
+          )}
         </div>
+
+        <div className="leading-tight">
+          <p className="text-[--text-primary] text-xs font-semibold tracking-wide">
+            View Cart
+          </p>
+          <p className="text-[--text-dim] text-[10px]">
+            {cartCount} item{cartCount !== 1 ? "s" : ""} added
+          </p>
+        </div>
+      </div>
+
+      {/* Right */}
+      <div className="relative flex items-center gap-2">
+        <span className="text-[--text-primary] font-semibold text-base">
+          ₹{cartTotal.toFixed(0)}
+        </span>
+
+       
+      </div>
+
+    </Link>
+  </div>
+</div>
+
       )}
 
       {/* Unavailable Item Popup */}
@@ -604,20 +658,58 @@ export default function MenuPage() {
         onClose={() => setUnavailablePopup(null)}
         className="absolute inset-0 flex items-center justify-center p-4"
       >
-        <div className="card rounded-xl p-5 max-w-[260px] w-full text-center">
-          <h3 className="text-[--text-primary] font-luxury text-base mb-2">
-            Not Available
-          </h3>
-          <p className="text-[--primary] font-medium text-sm mb-1">{unavailablePopup?.name}</p>
-          <p className="text-[--text-muted] text-xs mb-5">
-            Not available in {table?.zone?.name || 'this zone'}
-          </p>
-          <button 
-            onClick={() => setUnavailablePopup(null)}
-            className="w-full btn-secondary py-2.5 rounded-lg text-xs font-semibold"
-          >
-            Got it
-          </button>
+        <div className="card rounded-2xl p-6 max-w-[300px] w-full text-center relative overflow-hidden">
+          {/* Background glow */}
+          <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent pointer-events-none" />
+          
+          {/* Location GIF */}
+          <div className="relative w-20 h-20 mx-auto mb-3">
+            <img src="/location.gif" alt="Location" className="w-full h-full object-contain" />
+          </div>
+          
+          {/* Content */}
+          <div className="relative">
+            <h3 className="text-[--text-primary] font-luxury text-lg mb-1">
+              Oops! Zone Restricted
+            </h3>
+            <p className="text-[--primary] font-semibold text-base mb-4">{unavailablePopup?.name}</p>
+            
+            {/* Current zone badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-  border border-red-500/10 mb-3">
+              <div className="w-1.5 h-1.5 -full bg-red-400 animate-pulse" />
+              <span className="text-red-100 text-[11px] font-medium">
+                Not available at {table?.zone?.name || 'your table'}
+              </span>
+            </div>
+            
+            {/* Allowed zones */}
+            {unavailablePopup?.allowedZoneNames && unavailablePopup.allowedZoneNames.length > 0 ? (
+              <div className="mt-3 mb-5">
+                <p className="text-[--text-dim] text-[10px] uppercase tracking-wider mb-2">Available in</p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {unavailablePopup.allowedZoneNames.map((zone, i) => (
+                    <span 
+                      key={i}
+                      className="px-2.5 py-1 rounded- border border-emerald-500/10 text-emerald-300 text-[11px] font-medium"
+                    >
+                      {zone}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[--text-dim] text-[11px] mb-5 mt-2">
+                This item is zone-restricted
+              </p>
+            )}
+            
+            <button 
+              onClick={() => setUnavailablePopup(null)}
+              className="w-full py-3 rounded-xl text-sm font-semibold bg-[--card] border border-[--border] text-[--text-primary] hover:bg-[--bg-elevated] active:scale-[0.98] transition-all"
+            >
+              Got it
+            </button>
+          </div>
         </div>
       </AnimatedPopup>
 
@@ -662,22 +754,6 @@ export default function MenuPage() {
           </div>
         </div>
       </AnimatedBottomSheet>
-
-      {/* Water On The Way Toast */}
-      <AnimatedToast show={showWaterOnWay} onClose={() => setShowWaterOnWay(false)}>
-        <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-            <GlassWater size={20} className="text-emerald-400" />
-          </div>
-          <div className="flex-1">
-            <p className="text-emerald-400 font-semibold text-sm">Water on the way!</p>
-            <p className="text-emerald-400/70 text-xs">Staff is bringing it to you</p>
-          </div>
-          <button onClick={() => setShowWaterOnWay(false)} className="text-emerald-400/50">
-            <X size={18} />
-          </button>
-        </div>
-      </AnimatedToast>
     </div>
   );
 }
@@ -688,6 +764,10 @@ function MenuItem({ item, qty, onAdd, onUpdate, onUnavailable }) {
   
   const handleClick = () => {
     if (isRestricted) {
+      // Vibrate "na na na" pattern when unavailable
+      if (navigator.vibrate) {
+        navigator.vibrate([100, 50, 100, 50, 100]); // na-na-na pattern
+      }
       onUnavailable();
       return;
     }

@@ -1,19 +1,50 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { HelpCircle, Bell, ClipboardList, X, Check } from "lucide-react";
+import { HelpCircle, Bell, ClipboardList, X, Check, GlassWater } from "lucide-react";
 import { isRestaurantOpen } from "@/components/ClosedPopup";
 import { AnimatedBottomSheet, AnimatedToast } from "@/components/AnimatedPopup";
+import { useCart } from "@/lib/cart";
 
 export default function CallStaffButton({ tableId, tableNumber, zoneName }) {
   const router = useRouter();
+  const { cartCount, setHideCartBar } = useCart();
   const [isOpen, setIsOpen] = useState(false);
   const [showCallModal, setShowCallModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showWaterOnWay, setShowWaterOnWay] = useState(false);
   const [reason, setReason] = useState("");
   const createCall = useMutation(api.staffCalls.create);
+  
+  // Listen for water acknowledgment
+  const waterAcknowledged = useQuery(
+    api.staffCalls.getWaterAcknowledged, 
+    tableNumber ? { tableNumber: parseInt(tableNumber) } : "skip"
+  );
+
+  // Show "Water on the way" popup when staff acknowledges
+  useEffect(() => {
+    console.log("waterAcknowledged:", waterAcknowledged);
+    if (waterAcknowledged && waterAcknowledged.acknowledgedAt) {
+      const lastSeenTime = sessionStorage.getItem(`waterAck-${waterAcknowledged._id}`);
+      const ackTime = String(waterAcknowledged.acknowledgedAt);
+      console.log("lastSeenTime:", lastSeenTime, "ackTime:", ackTime);
+      
+      // Only show if we haven't seen this specific acknowledgment time
+      if (lastSeenTime !== ackTime) {
+        console.log("Showing water popup!");
+        setShowWaterOnWay(true);
+        setHideCartBar(true);
+        sessionStorage.setItem(`waterAck-${waterAcknowledged._id}`, ackTime);
+        setTimeout(() => {
+          setShowWaterOnWay(false);
+          setHideCartBar(false);
+        }, 4000);
+      }
+    }
+  }, [waterAcknowledged, setHideCartBar]);
 
   const reasons = ["Need assistance", "Ready to order", "Request bill"];
 
@@ -30,8 +61,19 @@ export default function CallStaffButton({ tableId, tableNumber, zoneName }) {
     setShowCallModal(false);
     setIsOpen(false);
     setReason("");
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 2000);
+    
+    // Show "Water on the way" for water requests, otherwise show success
+    if (selectedReason === "Asking for water") {
+      setShowWaterOnWay(true);
+      setHideCartBar(true);
+      setTimeout(() => {
+        setShowWaterOnWay(false);
+        setHideCartBar(false);
+      }, 4000);
+    } else {
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+    }
   };
 
   // Don't show if no table or restaurant is closed
@@ -40,11 +82,18 @@ export default function CallStaffButton({ tableId, tableNumber, zoneName }) {
   return (
     <>
       {/* Help Bubble */}
-      <div className="fixed bottom-20 right-3 z-30">
+      <div className={`fixed right-3 z-30 transition-all duration-300 ${cartCount > 0 ? 'bottom-24' : 'bottom-20'}`}>
         {/* Menu Options */}
         {isOpen && (
           <div className="absolute bottom-12 right-0 mb-2 animate-scale-in" style={{animationFillMode: 'forwards'}}>
             <div className="card rounded-xl p-1.5 min-w-[140px] shadow-xl">
+              <button
+                onClick={() => { handleCall("Asking for water"); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[--text-secondary] hover:bg-[--bg-elevated] hover:text-[--text-primary] transition-all text-[11px]"
+              >
+                <GlassWater size={14} className="text-blue-400" />
+                Water
+              </button>
               <button
                 onClick={() => { router.push('/my-orders'); setIsOpen(false); }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[--text-secondary] hover:bg-[--bg-elevated] hover:text-[--text-primary] transition-all text-[11px]"
@@ -131,6 +180,21 @@ export default function CallStaffButton({ tableId, tableNumber, zoneName }) {
           </div>
         </div>
       </AnimatedBottomSheet>
+
+      {/* Water On The Way Toast */}
+      <AnimatedToast 
+        show={showWaterOnWay} 
+        onClose={() => setShowWaterOnWay(false)}
+        bottomClass={cartCount > 0 ? 'bottom-4' : 'bottom-4'}
+      >
+        <div className="card rounded-xl p-3 flex items-center gap-3 shadow-lg max-w-sm mx-auto">
+          <img src="/water-loading.gif" alt="Loading" className="w-10 h-10 rounded-lg" />
+          <div className="flex-1">
+            <p className="text-[--text-primary] font-medium text-sm">Water on the way!</p>
+            <p className="text-[--text-dim] text-[10px]">Staff is bringing it to you</p>
+          </div>
+        </div>
+      </AnimatedToast>
     </>
   );
 }
