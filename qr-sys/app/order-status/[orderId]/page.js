@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { 
   CheckCircle, ChefHat, Truck, Clock, ArrowLeft, 
-  CreditCard, Banknote, UserRound, RefreshCw 
+  CreditCard, Banknote, UserRound, RefreshCw, IndianRupee, StickyNote
 } from "lucide-react";
 import MenuItemImage from "@/components/MenuItemImage";
 
@@ -199,7 +199,7 @@ export default function OrderStatusPage() {
         {/* Order Summary */}
         <div className="card rounded-xl p-6 mb-6 animate-slide-up delay-100" style={{animationFillMode: 'forwards'}}>
           <h3 className="text-[10px] tracking-[0.2em] text-[--text-muted] uppercase mb-5">
-            Order Summary
+            Bill Summary
           </h3>
           <div className="space-y-4">
             {order.items.map((item, index) => (
@@ -222,8 +222,30 @@ export default function OrderStatusPage() {
           
           <div className="divider-glow my-5" />
           
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-[--text-muted]">Total</span>
+          {/* Subtotal */}
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm text-[--text-muted]">Subtotal</span>
+            <span className="text-sm font-medium text-[--text-primary]">
+              ₹{(order.total + (order.depositUsed || 0)).toFixed(0)}
+            </span>
+          </div>
+          
+          {/* Credit Applied */}
+          {order.depositUsed > 0 && (
+            <div className="flex justify-between items-center mb-2 text-emerald-400">
+              <div>
+                <span className="text-sm">Credit Applied</span>
+                {order.customerPhone && (
+                  <p className="text-[10px] text-emerald-400/60">{order.customerPhone}</p>
+                )}
+              </div>
+              <span className="text-sm">-₹{order.depositUsed.toFixed(0)}</span>
+            </div>
+          )}
+          
+          {/* Total */}
+          <div className="flex justify-between items-center pt-2 border-t border-[--border]">
+            <span className="text-sm font-bold text-[--text-primary]">Total Paid</span>
             <span className="text-xl font-luxury font-semibold text-gradient">
               ₹{order.total.toFixed(0)}
             </span>
@@ -231,7 +253,10 @@ export default function OrderStatusPage() {
           
           {order.notes && (
             <div className="mt-5 p-4 bg-[--primary]/5 border border-[--primary]/20 rounded-xl">
-              <p className="text-xs text-[--primary]">📝 {order.notes}</p>
+              <p className="text-xs text-[--primary] flex items-center gap-1.5">
+                <StickyNote size={12} />
+                {order.notes}
+              </p>
             </div>
           )}
         </div>

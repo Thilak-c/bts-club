@@ -72,6 +72,18 @@ export default function MenuPage() {
     setIsHydrated(true);
   }, [tableId]);
 
+  // Show water popup for all customers after 5 seconds (if not already shown this session)
+  useEffect(() => {
+    const waterShown = sessionStorage.getItem(`table-${tableId}-water-shown`);
+    if (!waterShown && isHydrated) {
+      const timer = setTimeout(() => {
+        setShowWaterPopup(true);
+        sessionStorage.setItem(`table-${tableId}-water-shown`, 'true');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [tableId, isHydrated]);
+
   // Set table context
   useEffect(() => {
     if (tableId) {

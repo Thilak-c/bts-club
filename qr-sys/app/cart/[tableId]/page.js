@@ -616,17 +616,17 @@ export default function CartPage() {
                   ))}
                   <div className="border-t border-[--border] pt-2 flex justify-between">
                     <span className="text-[--text-muted]">Subtotal</span>
-                    <span className="text-[--text-primary]">₹{cartTotal.toFixed(0)}</span>
+                    <span className="text-[--text-primary] font-medium">₹{cartTotal.toFixed(0)}</span>
                   </div>
                   {depositToUse > 0 && (
                     <div className="flex justify-between text-emerald-400">
-                      <span>Reservation Credit</span>
+                      <span>Credit Applied</span>
                       <span>-₹{depositToUse.toFixed(0)}</span>
                     </div>
                   )}
-                  <div className="border-t border-[--border] pt-2 flex justify-between font-semibold">
-                    <span className="text-[--text-primary]">Total</span>
-                    <span className="text-[--primary]">₹{finalTotal.toFixed(0)}</span>
+                  <div className="border-t border-[--border] pt-2 flex justify-between font-bold">
+                    <span className="text-[--text-primary]">Total to Pay</span>
+                    <span className="text-[--primary] text-base">₹{finalTotal.toFixed(0)}</span>
                   </div>
                 </div>
               </div>
