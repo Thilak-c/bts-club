@@ -4,20 +4,30 @@ import { createContext, useContext, useState, useEffect } from "react";
 const CartContext = createContext();
 
 const CART_STORAGE_KEY = 'bts-cart';
+const SAVED_STORAGE_KEY = 'bts-saved';
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState([]);
+  const [savedItems, setSavedItems] = useState([]);
   const [hideCartBar, setHideCartBar] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Load cart from localStorage on mount
+  // Load cart and saved items from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(CART_STORAGE_KEY);
-    if (stored) {
+    const storedCart = localStorage.getItem(CART_STORAGE_KEY);
+    const storedSaved = localStorage.getItem(SAVED_STORAGE_KEY);
+    if (storedCart) {
       try {
-        setCart(JSON.parse(stored));
+        setCart(JSON.parse(storedCart));
       } catch (e) {
         console.error('Failed to parse cart from localStorage');
+      }
+    }
+    if (storedSaved) {
+      try {
+        setSavedItems(JSON.parse(storedSaved));
+      } catch (e) {
+        console.error('Failed to parse saved items from localStorage');
       }
     }
     setIsHydrated(true);
@@ -30,6 +40,13 @@ export function CartProvider({ children }) {
     }
   }, [cart, isHydrated]);
 
+  // Save saved items to localStorage whenever it changes
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(savedItems));
+    }
+  }, [savedItems, isHydrated]);
+
   const addToCart = (item) => {
     setCart((prev) => {
       const existing = prev.find((i) => i.menuItemId === item.menuItemId);
@@ -38,7 +55,7 @@ export function CartProvider({ children }) {
           i.menuItemId === item.menuItemId ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
-      return [...prev, { ...item, quantity: 1 }];
+      return [...prev, { ...item, quantity: 1, itemNote: '', customizations: [] }];
     });
   };
 
@@ -56,6 +73,47 @@ export function CartProvider({ children }) {
     );
   };
 
+  // Update item note for a specific item
+  const updateItemNote = (menuItemId, note) => {
+    setCart((prev) =>
+      prev.map((i) => (i.menuItemId === menuItemId ? { ...i, itemNote: note } : i))
+    );
+  };
+
+  // Update customizations for a specific item
+  const updateCustomizations = (menuItemId, customizations) => {
+    setCart((prev) =>
+      prev.map((i) => (i.menuItemId === menuItemId ? { ...i, customizations } : i))
+    );
+  };
+
+  // Save item for later
+  const saveForLater = (menuItemId) => {
+    const item = cart.find((i) => i.menuItemId === menuItemId);
+    if (item) {
+      setSavedItems((prev) => {
+        const exists = prev.find((i) => i.menuItemId === menuItemId);
+        if (exists) return prev;
+        return [...prev, { ...item, quantity: 1 }];
+      });
+      removeFromCart(menuItemId);
+    }
+  };
+
+  // Move saved item back to cart
+  const moveToCart = (menuItemId) => {
+    const item = savedItems.find((i) => i.menuItemId === menuItemId);
+    if (item) {
+      addToCart(item);
+      setSavedItems((prev) => prev.filter((i) => i.menuItemId !== menuItemId));
+    }
+  };
+
+  // Remove from saved items
+  const removeFromSaved = (menuItemId) => {
+    setSavedItems((prev) => prev.filter((i) => i.menuItemId !== menuItemId));
+  };
+
   const clearCart = () => {
     setCart([]);
     localStorage.removeItem(CART_STORAGE_KEY);
@@ -68,9 +126,15 @@ export function CartProvider({ children }) {
     <CartContext.Provider
       value={{
         cart,
+        savedItems,
         addToCart,
         removeFromCart,
         updateQuantity,
+        updateItemNote,
+        updateCustomizations,
+        saveForLater,
+        moveToCart,
+        removeFromSaved,
         clearCart,
         cartTotal,
         cartCount,

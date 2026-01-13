@@ -737,9 +737,7 @@ export default function MenuPage() {
       {/* Water Popup - slides up from bottom */}
       <AnimatedBottomSheet show={showWaterPopup} onClose={() => setShowWaterPopup(false)}>
         <div className="text-center">
-          <div className="w-14 h-14 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
-            <GlassWater size={28} className="text-blue-400" />
-          </div>
+          <img src="/water-loading.gif" alt="Loading" className="w-[70]  flex justify-center mx-auto rounded-lg" />
           <h3 className="text-[--text-primary] font-luxury text-lg mb-2">Want some water?</h3>
           <p className="text-[--text-muted] text-sm mb-5">We'll bring it right over</p>
           <div className="flex gap-3">

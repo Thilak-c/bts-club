@@ -8,17 +8,38 @@ import { api } from "@/convex/_generated/api";
 import { useSession } from "@/lib/session";
 import { useCart } from "@/lib/cart";
 import { useTable } from "@/lib/table";
+import { checkLocationPermission, RESTAURANT_LOCATION } from "@/lib/location";
 import { 
   Trash2, Plus, Minus, CreditCard, Banknote, 
-  UserRound, ArrowLeft, ShoppingBag, 
-  ChevronRight, Ticket, MessageSquare, X, Check
+  UserRound, ArrowLeft, 
+  ChevronRight, Ticket, MessageSquare, X, Check, MapPin, Navigation,
+  Bookmark, Clock, Heart, Edit3
 } from "lucide-react";
 import MenuItemImage from "@/components/MenuItemImage";
+
+// Tip options
+const tipOptions = [
+  { id: 'none', label: 'Not This Time', amount: 0 },
+  { id: '20', label: '₹20', amount: 20 },
+  { id: '40', label: '₹40', amount: 40 },
+  { id: '50', label: '₹50', amount: 50 },
+  { id: 'custom', label: '+ Custom', amount: 0 },
+];
+
+// Customization options (can be expanded per item type)
+const customizationOptions = [
+  { id: 'spice-mild', label: 'Mild Spice', category: 'spice' },
+  { id: 'spice-medium', label: 'Medium Spice', category: 'spice' },
+  { id: 'spice-hot', label: 'Extra Spicy', category: 'spice' },
+  { id: 'no-onion', label: 'No Onion', category: 'preference' },
+  { id: 'no-garlic', label: 'No Garlic', category: 'preference' },
+  { id: 'extra-cheese', label: 'Extra Cheese (+₹30)', category: 'addon', price: 30 },
+];
 
 // Confetti function
 const createConfetti = () => {
   const colors = ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3'];
-  const confettiCount = 50;
+  const confettiCount = 70;
   
   for (let i = 0; i < confettiCount; i++) {
     const confetti = document.createElement('div');
@@ -65,13 +86,21 @@ export default function CartPage() {
   const router = useRouter();
   const { sessionId } = useSession();
   const { setTable } = useTable();
-  const { cart, updateQuantity, removeFromCart, cartTotal, clearCart, cartCount } = useCart();
+  const { 
+    cart, updateQuantity, removeFromCart, cartTotal, clearCart, cartCount,
+    updateItemNote, updateCustomizations, saveForLater, savedItems, moveToCart, removeFromSaved
+  } = useCart();
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [isOrdering, setIsOrdering] = useState(false);
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showBillDetails, setShowBillDetails] = useState(false);
+  
+  // Location verification states
+  const [locationStatus, setLocationStatus] = useState('idle'); // idle, checking, verified, denied, too_far
+  const [locationError, setLocationError] = useState('');
+  const [userDistance, setUserDistance] = useState(null);
   
   // Phone number for order
   const [orderPhone, setOrderPhone] = useState("");
@@ -83,6 +112,28 @@ export default function CartPage() {
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponError, setCouponError] = useState("");
 
+  // Tip state
+  const [selectedTip, setSelectedTip] = useState(null);
+  const [customTipAmount, setCustomTipAmount] = useState('');
+  const [tipError, setTipError] = useState(false); // For tip validation
+  const tipSectionRef = useRef(null); // For scrolling to tip section
+  
+  // Item editing state
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [editingItemNote, setEditingItemNote] = useState('');
+  const [editingCustomizations, setEditingCustomizations] = useState([]);
+  
+  // Toast notification for save for later
+  const [savedToast, setSavedToast] = useState(null); // { name: 'Item Name' }
+  const [removingItemId, setRemovingItemId] = useState(null); // For exit animation
+  const [isTransitioning, setIsTransitioning] = useState(false); // For smooth layout transition
+  const [addingToCartId, setAddingToCartId] = useState(null); // For move to cart animation
+  const [isAddingToCart, setIsAddingToCart] = useState(false); // For cart appearing animation
+  
+  // Order animation states
+  const [orderAnimationStage, setOrderAnimationStage] = useState('idle'); // idle, loading, paper, flying, success
+  const [paperPosition, setPaperPosition] = useState({ bottom: 100, opacity: 1 });
+
   const activeOrder = useQuery(api.orders.getActiveBySession, sessionId ? { sessionId } : "skip");
   const createOrder = useMutation(api.orders.create);
 
@@ -92,6 +143,24 @@ export default function CartPage() {
   const customer = useQuery(api.customers.getByPhone, phoneToCheck ? { phone: phoneToCheck } : "skip");
   const depositBalance = customer?.depositBalance || 0;
   
+  // Calculate tip amount
+  const tipAmount = selectedTip === 'custom' 
+    ? (parseInt(customTipAmount) || 0) 
+    : (tipOptions.find(t => t.id === selectedTip)?.amount || 0);
+  
+  // Calculate customization extras
+  const customizationTotal = cart.reduce((sum, item) => {
+    const itemCustomizations = item.customizations || [];
+    const addonTotal = itemCustomizations.reduce((acc, custId) => {
+      const cust = customizationOptions.find(c => c.id === custId);
+      return acc + (cust?.price || 0);
+    }, 0);
+    return sum + (addonTotal * item.quantity);
+  }, 0);
+
+  // Estimated time based on cart items
+  const estimatedTime = Math.max(15, Math.min(45, 10 + (cartCount * 3)));
+
   // Load stored phone on mount
   useEffect(() => {
     if (storedPhone) {
@@ -99,11 +168,260 @@ export default function CartPage() {
     }
   }, [storedPhone]);
   
-  const depositToUse = depositBalance > 0 ? Math.min(depositBalance, cartTotal) : 0;
-  const finalTotal = cartTotal - depositToUse;
+  // Calculate totals including tip and customizations
+  const subtotal = cartTotal + customizationTotal;
+  const depositToUse = depositBalance > 0 ? Math.min(depositBalance, subtotal) : 0;
+  const finalTotal = subtotal - depositToUse + tipAmount;
 
   // Check if user already has credit from localStorage
   const hasStoredCredit = storedPhone && depositBalance > 0;
+
+  // Open item edit modal
+  const openItemEdit = (item) => {
+    setEditingItemId(item.menuItemId);
+    setEditingItemNote(item.itemNote || '');
+    setEditingCustomizations(item.customizations || []);
+  };
+
+  // Save item edits
+  const saveItemEdit = () => {
+    if (editingItemId) {
+      updateItemNote(editingItemId, editingItemNote);
+      updateCustomizations(editingItemId, editingCustomizations);
+      setEditingItemId(null);
+    }
+  };
+
+  // Toggle customization
+  const toggleCustomization = (custId) => {
+    setEditingCustomizations(prev => 
+      prev.includes(custId) 
+        ? prev.filter(c => c !== custId)
+        : [...prev, custId]
+    );
+  };
+
+  // Handle save for later with animation
+  const handleSaveForLater = (item) => {
+    const isLastItem = cart.length === 1;
+    
+    // Start exit animation
+    setRemovingItemId(item.menuItemId);
+    
+    // If last item, start transition state for smooth layout
+    if (isLastItem) {
+      setIsTransitioning(true);
+    }
+    
+    // After slide-out animation completes, actually save
+    setTimeout(() => {
+      saveForLater(item.menuItemId);
+      setRemovingItemId(null);
+      
+      // Show toast
+      // setSavedToast({ name: item.name });
+      
+      // Vibrate
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      
+      // Hide toast after 2.5 seconds
+      setTimeout(() => setSavedToast(null), 2500);
+      
+      // End transition after empty state fully animates in
+      if (isLastItem) {
+        setTimeout(() => setIsTransitioning(false), 500);
+      }
+    }, 350);
+  };
+
+  // Handle move to cart with animation
+  const handleMoveToCart = (item) => {
+    const isCartEmpty = cart.length === 0;
+    
+    // Start exit animation on saved item
+    setAddingToCartId(item.menuItemId);
+    
+    // If cart is empty, trigger the adding animation
+    if (isCartEmpty) {
+      setIsAddingToCart(true);
+    }
+    
+    // After animation, actually move
+    setTimeout(() => {
+      moveToCart(item.menuItemId);
+      setAddingToCartId(null);
+      
+      // Vibrate
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      
+      // End adding animation
+      if (isCartEmpty) {
+        setTimeout(() => setIsAddingToCart(false), 500);
+      }
+    }, 300);
+  };
+
+  // Order animation - paper flying to clouds
+  const vibrateStage = (stage) => {
+    if (!navigator.vibrate) return;
+    if (stage === "loading") navigator.vibrate([20, 60, 20]);
+    if (stage === "flying") navigator.vibrate([20, 150, 20, 100, 20, 70, 20, 50, 20, 30, 20, 20, 20, 15, 20, 10, 20, 10, 20]);
+    if (stage === "success") navigator.vibrate([40, 80, 40, 80, 60]);
+  };
+
+  const startOrderAnimation = async () => {
+    // Validate phone number
+    if (orderPhone.length !== 10) {
+      setPhoneError("Enter 10 digit phone number");
+      return;
+    }
+    
+    // Validate tip selection
+    if (selectedTip === null) {
+      setTipError(true);
+      tipSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    
+    if (cart.length === 0 || !paymentMethod || !sessionId) {
+      return;
+    }
+    
+    // Verify location first (if not already verified)
+    if (locationStatus !== 'verified') {
+      const isAtRestaurant = await verifyLocation();
+      if (!isAtRestaurant) {
+        return;
+      }
+    }
+
+    const customerPhone = `+91${orderPhone}`;
+    localStorage.setItem('customerPhone', customerPhone);
+    const phoneForDeposit = depositToUse > 0 ? phoneToCheck : customerPhone;
+
+    // For pay-now, open Razorpay first
+    if (paymentMethod === 'pay-now') {
+      setIsOrdering(true);
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_yourkeyhere",
+        amount: Math.round(finalTotal * 100),
+        currency: "INR",
+        name: "BTS DISC",
+        description: `Order - Table ${tableId}`,
+        image: "https://bts-club-one.vercel.app/logo.png",
+        handler: async function (response) {
+          // Payment successful - now run animation and create order
+          runOrderAnimation(phoneForDeposit, `Payment: ${response.razorpay_payment_id}`);
+        },
+        prefill: {
+          contact: phoneToCheck?.replace('+', '') || '',
+        },
+        theme: {
+          color: "#d4af7d",
+        },
+        modal: {
+          ondismiss: function () {
+            setIsOrdering(false);
+          },
+        },
+      };
+      const razorpay = new window.Razorpay(options);
+      razorpay.on("payment.failed", function (response) {
+        alert("Payment failed: " + response.error.description);
+        setIsOrdering(false);
+      });
+      razorpay.open();
+      return;
+    }
+
+    // For other payment methods, run animation directly
+    runOrderAnimation(phoneForDeposit, notes || "");
+  };
+
+  // Actual animation + order creation
+  const runOrderAnimation = async (phoneForDeposit, orderNotes) => {
+    // Stage 1: Loading
+    setOrderAnimationStage('loading');
+    vibrateStage('loading');
+    
+    // Create order in background during animation
+    let orderCreated = false;
+    let orderError = null;
+    
+    const orderPromise = createOrder({ 
+      tableId: tableId.toString(), 
+      items: cart.map((item) => ({ 
+        menuItemId: item.menuItemId, 
+        name: item.name, 
+        price: item.price, 
+        quantity: item.quantity, 
+        image: item.image 
+      })), 
+      total: finalTotal, 
+      paymentMethod, 
+      notes: orderNotes, 
+      customerSessionId: sessionId,
+      customerPhone: phoneForDeposit,
+      depositUsed: depositToUse || 0
+    }).then(() => {
+      orderCreated = true;
+      clearCart();
+    }).catch((err) => {
+      orderError = err;
+    });
+    
+    setTimeout(() => {
+      // Stage 2: Transform to paper
+      setOrderAnimationStage('paper');
+      
+      setTimeout(() => {
+        // Stage 3: Paper flies up
+        setOrderAnimationStage('flying');
+        vibrateStage('flying');
+        
+        let currentBottom = 100;
+        
+        const flyInterval = setInterval(() => {
+          currentBottom += 15;
+          setPaperPosition({ 
+            bottom: currentBottom, 
+            opacity: currentBottom > 500 ? Math.max(0, 1 - (currentBottom - 500) / 200) : 1 
+          });
+          
+          if (currentBottom > 700) {
+            clearInterval(flyInterval);
+            
+            // Wait for order to complete
+            orderPromise.finally(() => {
+              if (orderError) {
+                alert("Order failed: " + orderError.message);
+                setOrderAnimationStage('idle');
+                setPaperPosition({ bottom: 100, opacity: 1 });
+                setIsOrdering(false);
+                return;
+              }
+              
+              // Stage 4: Success
+              vibrateStage('success');
+              setTimeout(() => {
+                setOrderAnimationStage('success');
+                setShowOrderSuccess(true);
+                setIsOrdering(false);
+                setTimeout(() => {
+                  setOrderAnimationStage('idle');
+                  setPaperPosition({ bottom: 100, opacity: 1 });
+                }, 500);
+              }, 300);
+            });
+          }
+        }, 20);
+      }, 600);
+    }, 800);
+  };
 
   const handleApplyCoupon = () => {
     if (couponPhone.length !== 10) {
@@ -133,6 +451,34 @@ export default function CartPage() {
     setCouponPhone("");
   };
 
+  // Location verification function
+  const verifyLocation = async () => {
+    setLocationStatus('checking');
+    setLocationError('');
+    
+    try {
+      const result = await checkLocationPermission();
+      setUserDistance(result.distance);
+      
+      if (result.allowed) {
+        setLocationStatus('verified');
+        return true;
+      } else {
+        setLocationStatus('too_far');
+        setLocationError(`You're ${result.distance}m away. Please be within ${RESTAURANT_LOCATION.radius}m of the restaurant to order.`);
+        return false;
+      }
+    } catch (error) {
+      setLocationStatus('denied');
+      if (error.code === 1) { // PERMISSION_DENIED
+        setLocationError('Please allow location access to place your order. This ensures you are at the restaurant.');
+      } else {
+        setLocationError(error.message || 'Could not verify your location. Please try again.');
+      }
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (tableId) {
       setTable({ tableId: String(tableId), tableNumber: parseInt(tableId), zoneName: null });
@@ -150,9 +496,25 @@ export default function CartPage() {
       return;
     }
     
+    // Validate tip selection
+    if (selectedTip === null) {
+      setTipError(true);
+      // Scroll to tip section
+      tipSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    
     if (cart.length === 0 || !paymentMethod || !sessionId) {
       console.log("Early return - missing data");
       return;
+    }
+    
+    // Verify location first (if not already verified)
+    if (locationStatus !== 'verified') {
+      const isAtRestaurant = await verifyLocation();
+      if (!isAtRestaurant) {
+        return; // Stop if location verification failed
+      }
     }
     
     const customerPhone = `+91${orderPhone}`;
@@ -299,52 +661,36 @@ export default function CartPage() {
   // Order success overlay - check this FIRST before empty cart
   if (showOrderSuccess) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[--bg]">
-        <div className="text-center animate-scale-in">
-          <img src="/payment-success.gif" alt="Order success" className="w-32 h-32 mx-auto mb-6" />
-          <h1 className="font-luxury text-2xl font-semibold text-[--text-primary] mb-2">Order Received!</h1>
-          <p className="text-[--text-muted] text-sm mb-6">Your order is being prepared</p>
-          <Link href="/my-orders" className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold">
-            My Orders
-          </Link>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[--bg] overflow-hidden">
+        {/* Subtle glow effect */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[--primary]/10 rounded-full blur-3xl animate-pulse-soft" />
         </div>
-      </div>
-    );
-  }
 
-  // Empty cart
-  if (cart.length === 0) {
-    return (
-      <div className="min-h-screen flex flex-col bg-[--bg]">
-        <Script src="https://checkout.razorpay.com/v1/checkout.js" />
-        <header className="p-4">
-          <Link href={`/menu/${tableId}`} className="w-10 h-10 flex items-center justify-center rounded-xl bg-[--card] border border-[--border]">
-            <ArrowLeft size={18} className="text-[--text-muted]" />
-          </Link>
-        </header>
-        <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
-          {/* Animated empty plate illustration */}
-          <div className="relative mb-8">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[--card] to-[--bg-elevated] border-4 border-[--border] flex items-center justify-center animate-pulse">
-              <div className="w-24 h-24 rounded-full bg-[--bg] border-2 border-dashed border-[--border] flex items-center justify-center">
-                <span className="text-4xl animate-bounce">🍽️</span>
-              </div>
-            </div>
-            {/* Floating food icons */}
-            <div className="absolute -top-2 -right-2 text-2xl animate-bounce" style={{ animationDelay: '0.1s' }}>🍕</div>
-            <div className="absolute -bottom-1 -left-3 text-2xl animate-bounce" style={{ animationDelay: '0.3s' }}>🍔</div>
-            <div className="absolute top-1/2 -right-6 text-xl animate-bounce" style={{ animationDelay: '0.5s' }}>🍟</div>
+        {/* Main content */}
+        <div className="text-center z-10 px-6">
+          {/* Checkmark circle */}
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center animate-scale-in">
+            <Check size={40} className="text-emerald-400" />
           </div>
           
-          <h1 className="font-luxury text-2xl font-semibold text-[--text-primary] mb-2">Your cart is hungry!</h1>
-          <p className="text-[--text-muted] text-sm mb-8 text-center">Let's fill it up with some delicious food</p>
+          <h1 className="font-luxury text-2xl font-semibold text-[--text-primary] mb-2 animate-slide-up" style={{ animationDelay: '0.1s', animationFillMode: 'forwards', opacity: 0 }}>
+            Order Confirmed
+          </h1>
+          <p className="text-[--text-muted] text-sm mb-1 animate-slide-up" style={{ animationDelay: '0.2s', animationFillMode: 'forwards', opacity: 0 }}>
+            Your order is being prepared
+          </p>
+          <p className="text-[--text-dim] text-xs mb-8 animate-slide-up" style={{ animationDelay: '0.3s', animationFillMode: 'forwards', opacity: 0 }}>
+            Table {tableId}
+          </p>
           
           <Link 
-            href={`/menu/${tableId}`} 
-            className="btn-primary px-8 py-4 rounded-xl text-sm font-semibold flex items-center gap-2 group"
+            href="/my-orders" 
+            className="btn-primary px-8 py-4 rounded-xl text-sm font-semibold inline-flex items-center gap-2 animate-slide-up"
+            style={{ animationDelay: '0.4s', animationFillMode: 'forwards', opacity: 0 }}
           >
-            <span>Explore Menu</span>
-            <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            View Order Status
+            <ChevronRight size={18} />
           </Link>
         </div>
       </div>
@@ -371,9 +717,9 @@ export default function CartPage() {
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-4">
-        {/* Deposit Banner - show if has credit */}
-        {depositBalance > 0 && (
-          <div className=" rounded-2xl p-4 mb-4">
+        {/* Deposit Banner - show if has credit AND cart has items */}
+        {cart.length > 0 && depositBalance > 0 && (
+          <div className="rounded-2xl p-4 mb-4 animate-slide-down" style={{ animationFillMode: 'forwards' }}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                 <Ticket size={20} className="text-emerald-400" />
@@ -392,9 +738,9 @@ export default function CartPage() {
           </div>
         )}
 
-        {/* Coupon Input - show if no stored credit and no coupon applied with credit */}
-        {!hasStoredCredit && !(couponApplied && depositBalance > 0) && (
-          <div className="mb-4">
+        {/* Coupon Input - show if no stored credit and no coupon applied with credit AND cart has items */}
+        {cart.length > 0 && !hasStoredCredit && !(couponApplied && depositBalance > 0) && (
+          <div className="mb-4 animate-slide-down" style={{ animationFillMode: 'forwards' }}>
             {!showCouponInput ? (
               <button 
                 onClick={() => setShowCouponInput(true)}
@@ -442,92 +788,192 @@ export default function CartPage() {
           </div>
         )}
 
-        {/* Cart Items */}
-        <div className="space-y-3 mb-4">
-          {cart.map((item, index) => (
+        {/* Cart Items or Empty State */}
+        <div>
+          {cart.length === 0 && !isAddingToCart ? (
             <div 
-              key={item.menuItemId} 
-              className="bg-[--card] border border-[--border] rounded-2xl p-3 animate-slide-up"
-              style={{ animationDelay: `${index * 0.05}s`, animationFillMode: 'forwards' }}
+              className={`bg-[--card] border border-[--border] rounded-2xl text-center mb-4 overflow-hidden ${isTransitioning ? 'animate-expand-height p-0' : 'animate-scale-in p-8'}`} 
+              style={{ animationFillMode: 'forwards' }}
             >
-              <div className="flex gap-3">
-                {/* Image */}
-                <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[--bg-elevated]">
-                  <MenuItemImage storageId={item.image} alt={item.name} className="w-full h-full object-cover" />
-                </div>
-                
-                {/* Details */}
-                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                  <div>
-                    <h3 className="font-medium text-[--text-primary] text-sm line-clamp-1">{item.name}</h3>
-                    <p className="text-[--primary] font-semibold text-sm mt-0.5">₹{item.price}</p>
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[--bg-elevated] flex items-center justify-center animate-bounce-in" style={{ animationDelay: isTransitioning ? '0.25s' : '0.1s', animationFillMode: 'forwards', opacity: 0 }}>
+                <Plus size={24} className="text-[--text-dim]" />
+              </div>
+              <p className="text-[--text-muted] text-sm mb-4">Your cart is empty</p>
+              <Link 
+                href={`/menu/${tableId}`} 
+                className="inline-flex items-center gap-2 text-[--primary] text-sm font-medium hover:underline"
+              >
+                Add items from menu
+              </Link>
+            </div>
+          ) : cart.length > 0 ? (
+          <div className={`space-y-3 mb-4 ${isAddingToCart ? 'animate-slide-up' : ''}`} style={{ animationFillMode: 'forwards' }}>
+            {/* Estimated Time */}
+            <div className={`flex items-center gap-2 px-1 mb-2 ${isAddingToCart ? 'animate-fade-in' : ''}`} style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }}>
+              <Clock size={14} className="text-[--primary]" />
+              <span className="text-xs text-[--text-muted]">Estimated time: <span className="text-[--text-primary] font-medium">{estimatedTime}-{estimatedTime + 10} mins</span></span>
+            </div>
+
+            {cart.map((item, index) => (
+              <div 
+                key={item.menuItemId} 
+                className={`bg-[--card] border border-[--border] rounded-2xl p-3 ${
+                  removingItemId === item.menuItemId 
+                    ? 'animate-slide-out-left' 
+                    : 'animate-slide-up'
+                }`}
+                style={{ animationDelay: removingItemId === item.menuItemId ? '0s' : `${index * 0.05}s`, animationFillMode: 'forwards' }}
+              >
+                <div className="flex gap-3">
+                  {/* Image */}
+                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-[--bg-elevated]">
+                    <MenuItemImage storageId={item.image} alt={item.name} className="w-full h-full object-cover" />
                   </div>
                   
-                  {/* Quantity & Delete */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 bg-[--bg-elevated] rounded-lg p-0.5">
-                      <button 
-                        onClick={() => updateQuantity(item.menuItemId, item.quantity - 1)} 
-                        className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-[--card] active:scale-95 transition-all"
-                      >
-                        <Minus size={14} className="text-[--text-muted]" />
-                      </button>
-                      <span className="w-6 text-center text-sm font-bold text-[--text-primary]">{item.quantity}</span>
-                      <button 
-                        onClick={() => updateQuantity(item.menuItemId, item.quantity + 1)} 
-                        className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-[--card] active:scale-95 transition-all"
-                      >
-                        <Plus size={14} className="text-[--primary]" />
-                      </button>
+                  {/* Details */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                    <div>
+                      <h3 className="font-medium text-[--text-primary] text-sm line-clamp-1">{item.name}</h3>
+                      <p className="text-[--primary] font-semibold text-sm mt-0.5">₹{item.price}</p>
+                      {/* Show item note if exists */}
+                      {item.itemNote && (
+                        <p className="text-[--text-dim] text-[10px] mt-1 line-clamp-1">📝 {item.itemNote}</p>
+                      )}
+                      {/* Show customizations if exists */}
+                      {item.customizations?.length > 0 && (
+                        <p className="text-[--text-dim] text-[10px] mt-0.5">
+                          {item.customizations.map(c => customizationOptions.find(o => o.id === c)?.label).filter(Boolean).join(', ')}
+                        </p>
+                      )}
                     </div>
-                    <button 
-                      onClick={() => removeFromCart(item.menuItemId)} 
-                      className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center hover:bg-red-500/20 active:scale-95 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    
+                    {/* Quantity & Actions */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1 bg-[--bg-elevated] rounded-lg p-0.5">
+                        <button 
+                          onClick={() => updateQuantity(item.menuItemId, item.quantity - 1)} 
+                          className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-[--card] active:scale-95 transition-all"
+                        >
+                          <Minus size={14} className="text-[--text-muted]" />
+                        </button>
+                        <span className="w-6 text-center text-sm font-bold text-[--text-primary]">{item.quantity}</span>
+                        <button 
+                          onClick={() => updateQuantity(item.menuItemId, item.quantity + 1)} 
+                          className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-[--card] active:scale-95 transition-all"
+                        >
+                          <Plus size={14} className="text-[--primary]" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {/* Edit/Customize button */}
+                        <button 
+                          onClick={() => openItemEdit(item)} 
+                          className="w-8 h-8 rounded-lg bg-[--bg-elevated] text-[--text-muted] flex items-center justify-center hover:bg-[--primary]/10 hover:text-[--primary] active:scale-95 transition-all"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        {/* Save for later */}
+                        <button 
+                          onClick={() => handleSaveForLater(item)} 
+                          className="w-8 h-8 rounded-lg bg-[--bg-elevated] text-[--text-muted] flex items-center justify-center hover:bg-amber-500/10 hover:text-amber-400 active:scale-95 transition-all"
+                        >
+                          <Bookmark size={14} />
+                        </button>
+                        {/* Delete */}
+                        <button 
+                          onClick={() => removeFromCart(item.menuItemId)} 
+                          className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center hover:bg-red-500/20 active:scale-95 transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Item Total */}
+                  <div className="text-right py-0.5">
+                    <p className="text-[--text-primary] font-bold text-sm">₹{(item.price * item.quantity).toFixed(0)}</p>
                   </div>
                 </div>
-
-                {/* Item Total */}
-                <div className="text-right py-0.5">
-                  <p className="text-[--text-primary] font-bold text-sm">₹{(item.price * item.quantity).toFixed(0)}</p>
-                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          
+            {/* Add More */}
+            <Link 
+              href={`/menu/${tableId}`}
+              className="flex items-center justify-center gap-2 py-3 text-[--primary] text-sm font-medium hover:underline"
+            >
+              <Plus size={16} />
+              Add more items
+            </Link>
+          </div>
+        ) : null}
         </div>
 
-        {/* Add More */}
-        <Link 
-          href={`/menu/${tableId}`}
-          className="flex items-center justify-center gap-2 py-3 text-[--primary] text-sm font-medium hover:underline"
-        >
-          <Plus size={16} />
-          Add more items
-        </Link>
+        {/* Saved for Later */}
+        {savedItems.length > 0 && (
+          <div className="mt-4 mb-4">
+            <p className="text-[10px] tracking-[0.2em] text-[--text-dim] mb-3 uppercase font-medium flex items-center gap-2">
+              <Bookmark size={12} />
+              Saved for Later ({savedItems.length})
+            </p>
+            <div className="space-y-2">
+              {savedItems.map((item, index) => (
+                <div 
+                  key={item.menuItemId} 
+                  className={`bg-[--card] border border-[--border] rounded-xl p-3 flex items-center gap-3 ${
+                    addingToCartId === item.menuItemId 
+                      ? 'animate-slide-out-left' 
+                      : 'animate-scale-in'
+                  }`}
+                  style={{ animationDelay: addingToCartId === item.menuItemId ? '0s' : `${index * 0.05}s`, animationFillMode: 'forwards' }}
+                >
+                  <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-[--bg-elevated]">
+                    <MenuItemImage storageId={item.image} alt={item.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm text-[--text-primary] line-clamp-1">{item.name}</h4>
+                    <p className="text-xs text-[--primary]">₹{item.price}</p>
+                  </div>
+                  <button 
+                    onClick={() => handleMoveToCart(item)}
+                    className="px-3 py-1.5 bg-[--primary]/10 text-[--primary] rounded-lg text-xs font-medium hover:bg-[--primary]/20 active:scale-95 transition-all"
+                  >
+                    Add to Cart
+                  </button>
+                  <button 
+                    onClick={() => removeFromSaved(item.menuItemId)}
+                    className="text-[--text-dim] hover:text-red-400"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Special Instructions */}
         <div className="mt-4">
           <button 
             onClick={() => setShowNotes(!showNotes)}
-            className="w-full flex items-center justify-between p-4 bg-[--card] border border-[--border] rounded-xl"
+            className="w-full flex items-center justify-between p-4 bg-[--card] border border-[--border] rounded-xl transition-all duration-300 hover:border-[--primary]/30"
           >
             <div className="flex items-center gap-3">
-              <MessageSquare size={18} className="text-[--text-muted]" />
+              <MessageSquare size={18} className={`transition-colors duration-300 ${showNotes ? 'text-[--primary]' : 'text-[--text-muted]'}`} />
               <span className="text-sm text-[--text-muted]">
                 {notes ? notes.slice(0, 30) + (notes.length > 30 ? '...' : '') : 'Add special instructions'}
               </span>
             </div>
-            <ChevronRight size={18} className={`text-[--text-dim] transition-transform duration-300 ${showNotes ? 'rotate-90' : ''}`} />
+            <ChevronRight size={18} className={`text-[--text-dim] transition-transform duration-300 ease-out ${showNotes ? 'rotate-90' : ''}`} />
           </button>
-          <div className={`grid transition-all duration-300 ease-out ${showNotes ? 'grid-rows-[1fr] mt-2' : 'grid-rows-[0fr]'}`}>
+          <div className={`grid transition-all duration-300 ease-out ${showNotes ? 'grid-rows-[1fr] mt-2 opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
             <div className="overflow-hidden">
               <textarea 
                 value={notes} 
                 onChange={(e) => setNotes(e.target.value)} 
                 placeholder="Allergies, spice level, special requests..." 
-                className="w-full rounded-xl p-4 text-sm resize-none bg-[--card] border border-[--border] focus:border-[--primary] outline-none" 
+                className="w-full rounded-xl p-4 text-sm resize-none bg-[--card] border border-[--border] focus:border-[--primary] outline-none transition-all duration-300" 
                 rows={3}
               />
             </div>
@@ -537,19 +983,19 @@ export default function CartPage() {
         {/* Phone Number */}
         <div className="mt-6">
           <p className="text-[10px] tracking-[0.2em] text-[--text-dim] mb-3 uppercase font-medium">Your Phone Number</p>
-          <div className="flex items-center bg-[--card] border border-[--border] rounded-xl overflow-hidden">
-            <span className="px-4 py-3 text-[--text-muted] text-sm border-r border-[--border]">+91</span>
-            <input
-              type="tel"
-              value={orderPhone}
-              onChange={(e) => { setOrderPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setPhoneError(''); }}
-              placeholder="10 digit number"
-              maxLength={10}
-              className="flex-1 bg-transparent px-4 py-3 text-sm outline-none"
-            />
-          </div>
-          {phoneError && <p className="text-red-400 text-xs mt-2">{phoneError}</p>}
-        </div>
+              <div className="flex items-center bg-[--card] border border-[--border] rounded-xl overflow-hidden">
+                <span className="px-4 py-3 text-[--text-muted] text-sm border-r border-[--border]">+91</span>
+                <input
+                  type="tel"
+                  value={orderPhone}
+                  onChange={(e) => { setOrderPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setPhoneError(''); }}
+                  placeholder="10 digit number"
+                  maxLength={10}
+                  className="flex-1 bg-transparent px-4 py-3 text-sm outline-none"
+                />
+              </div>
+              {phoneError && <p className="text-red-400 text-xs mt-2">{phoneError}</p>}
+            </div>
 
         {/* Payment Method */}
         <div className="mt-6">
@@ -581,7 +1027,115 @@ export default function CartPage() {
             })}
           </div>
         </div>
+
+        {/* Tip Option */}
+        {cart.length > 0 && (
+          <div className="mt-6" ref={tipSectionRef}>
+            <p className="text-[10px] tracking-[0.2em] text-[--text-dim] mb-3 uppercase font-medium flex items-center gap-2">
+              <Heart size={12} />
+              Add a tip for the staff
+            </p>
+            <div className="flex gap-2 justify-center flex-wrap items-center">
+              {tipOptions.map((tip, index) => (
+                <button
+                  key={tip.id}
+                  onClick={() => {
+                    setSelectedTip(tip.id);
+                    setTipError(false);
+                    if (tip.id !== 'custom') setCustomTipAmount('');
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 active:scale-95 ${
+                    tip.id === 'custom'
+                      ? selectedTip === 'custom'
+                        ? 'text-[--primary]'
+                        : 'text-[--text-muted] hover:text-[--primary]'
+                      : selectedTip === tip.id
+                        ? 'bg-[--primary] text-[--bg] scale-105 shadow-lg shadow-[--primary]/25'
+                        : 'bg-[--card] border border-[--border] text-[--text-muted] hover:border-[--primary]/50'
+                  }`}
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  {tip.label}
+                </button>
+              ))}
+            </div>
+            {tipError && (
+              <p className="text-red-400 text-xs mt-2 text-center animate-scale-in">Please select a tip option or choose "+ Custom" with ₹0</p>
+            )}
+            <div className={`grid transition-all duration-300 ease-out ${selectedTip === 'custom' ? 'grid-rows-[1fr] mt-3 opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+              <div className="overflow-hidden">
+                <div className="flex items-center bg-[--card] border border-[--border] rounded-xl overflow-hidden">
+                  <span className="px-4 py-3 text-[--text-muted] text-sm border-r border-[--border]">₹</span>
+                  <input
+                    type="number"
+                    value={customTipAmount}
+                    onChange={(e) => setCustomTipAmount(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter amount"
+                    className="flex-1 bg-transparent px-4 py-3 text-sm outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Item Edit Modal */}
+      {editingItemId && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => setEditingItemId(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div 
+            className="relative w-full max-w-lg bg-[--card] rounded-t-3xl p-6 border-t border-[--border] animate-slide-up"
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 2rem))' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-[--border] rounded-full mx-auto mb-5" />
+            
+            <h3 className="text-[--text-primary] font-semibold text-lg mb-4">Customize Item</h3>
+            
+            {/* Item Note */}
+            <div className="mb-4">
+              <p className="text-xs text-[--text-dim] mb-2">Special instructions for this item</p>
+              <textarea
+                value={editingItemNote}
+                onChange={(e) => setEditingItemNote(e.target.value)}
+                placeholder="No onions, extra spicy, etc..."
+                className="w-full rounded-xl p-3 text-sm resize-none bg-[--bg] border border-[--border] focus:border-[--primary] outline-none transition-all duration-300"
+                rows={2}
+              />
+            </div>
+
+            {/* Customizations */}
+            <div className="mb-6">
+              <p className="text-xs text-[--text-dim] mb-2">Customizations</p>
+              <div className="flex flex-wrap gap-2">
+                {customizationOptions.map((cust, index) => (
+                  <button
+                    key={cust.id}
+                    onClick={() => toggleCustomization(cust.id)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-300 active:scale-95 ${
+                      editingCustomizations.includes(cust.id)
+                        ? 'bg-[--primary] text-[--bg] scale-105'
+                        : 'bg-[--bg] border border-[--border] text-[--text-muted] hover:border-[--primary]/50'
+                    }`}
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    {cust.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={saveItemEdit}
+              className="w-full btn-primary py-3 rounded-xl text-sm font-semibold"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Summary */}
       <div className="fixed bottom-0 left-0 right-0 bg-[--bg] border-t border-[--border]">
@@ -593,20 +1147,23 @@ export default function CartPage() {
           >
             <div className="flex items-center gap-3">
               <span className="text-[--text-muted]">{cartCount} items</span>
+              {tipAmount > 0 && (
+                <span className="text-pink-400 text-xs bg-pink-500/10 px-2 py-0.5 rounded">+₹{tipAmount} tip</span>
+              )}
               {depositToUse > 0 && (
                 <span className="text-emerald-400 text-xs bg-emerald-500/10 px-2 py-0.5 rounded">-₹{depositToUse}</span>
               )}
               <ChevronRight size={14} className={`text-[--text-dim] transition-transform ${showBillDetails ? 'rotate-90' : ''}`} />
             </div>
             <span className="font-bold text-lg text-[--primary]">₹{finalTotal.toFixed(0)}</span>
-          </button>
+            </button>
 
           {/* Expanded Bill Details */}
           <div 
-            className={`grid transition-all duration-300 ease-out ${showBillDetails ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+            className={`grid transition-all duration-300 ease-out ${showBillDetails ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
           >
             <div className="overflow-hidden">
-              <div className="bg-[--card] border border-[--border] rounded-xl p-3 mb-3 text-sm">
+              <div className="bg-[--card] border border-[--border] rounded-xl p-3 mb-3 text-sm animate-fade-in">
                 <div className="space-y-2">
                   {cart.map(item => (
                     <div key={item.menuItemId} className="flex justify-between text-[--text-muted]">
@@ -618,6 +1175,18 @@ export default function CartPage() {
                     <span className="text-[--text-muted]">Subtotal</span>
                     <span className="text-[--text-primary] font-medium">₹{cartTotal.toFixed(0)}</span>
                   </div>
+                  {customizationTotal > 0 && (
+                    <div className="flex justify-between text-[--text-muted]">
+                      <span>Customizations</span>
+                      <span>₹{customizationTotal.toFixed(0)}</span>
+                    </div>
+                  )}
+                  {tipAmount > 0 && (
+                    <div className="flex justify-between text-pink-400">
+                      <span>Tip</span>
+                      <span>+₹{tipAmount.toFixed(0)}</span>
+                    </div>
+                  )}
                   {depositToUse > 0 && (
                     <div className="flex justify-between text-emerald-400">
                       <span>Credit Applied</span>
@@ -635,21 +1204,42 @@ export default function CartPage() {
 
           {/* Place Order Button */}
           <button 
-            onClick={handleOrder} 
-            disabled={isOrdering || !paymentMethod} 
+            onClick={startOrderAnimation} 
+            disabled={orderAnimationStage !== 'idle' || !paymentMethod || locationStatus === 'checking' || cart.length === 0} 
             className={`w-full py-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-              isOrdering || !paymentMethod 
+              orderAnimationStage !== 'idle' || !paymentMethod || locationStatus === 'checking' || cart.length === 0
                 ? "bg-[--border] text-[--text-dim] cursor-not-allowed" 
-                : "btn-primary"
+                : locationStatus === 'denied' || locationStatus === 'too_far'
+                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                  : "btn-primary"
             }`}
           >
-            {isOrdering ? (
+            {orderAnimationStage === 'loading' ? (
               <>
                 <div className="w-5 h-5 spinner rounded-full" />
-                Placing Order...
+                Preparing...
+              </>
+            ) : orderAnimationStage === 'paper' ? (
+              <span className="text-2xl animate-scale-in">📄</span>
+            ) : locationStatus === 'checking' ? (
+              <>
+                <div className="w-5 h-5 spinner rounded-full" />
+                Verifying Location...
+              </>
+            ) : locationStatus === 'denied' ? (
+              <>
+                <MapPin size={18} />
+                Allow Location Access
+              </>
+            ) : locationStatus === 'too_far' ? (
+              <>
+                <Navigation size={18} />
+                You're too far • {userDistance}m away
               </>
             ) : !paymentMethod ? (
               "Select Payment Method"
+            ) : cart.length === 0 ? (
+              "Add items to order"
             ) : (
               <>
                 Place Order • ₹{finalTotal.toFixed(0)}
@@ -659,6 +1249,52 @@ export default function CartPage() {
           </button>
         </div>
       </div>
+
+      {/* Saved for Later Toast */}
+      {savedToast && (
+        <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+          <div className="bg-[--card] border border-amber-500/30 rounded-xl px-4 py-3 shadow-lg flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+              <Bookmark size={16} className="text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm text-[--text-primary] font-medium">Saved for later</p>
+              <p className="text-xs text-[--text-dim]">{savedToast.name}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clouds at top - show during flying animation */}
+      {(orderAnimationStage === 'flying' || orderAnimationStage === 'success') && (
+        <div className="fixed top-0 left-0 right-0 z-50 pointer-events-none overflow-hidden">
+          <div className="flex justify-between pt-8 px-4">
+            {/* Left clouds - slide in from left */}
+            <div className="flex gap-2 animate-slide-in-left" style={{ animationDuration: '0.6s' }}>
+              <span className="text-5xl animate-float" style={{ animationDelay: '0s' }}>☁️</span>
+              <span className="text-4xl animate-float mt-4" style={{ animationDelay: '0.2s' }}>☁️</span>
+            </div>
+            {/* Right clouds - slide in from right */}
+            <div className="flex gap-2 animate-slide-in-right" style={{ animationDuration: '0.6s' }}>
+              <span className="text-4xl animate-float mt-2" style={{ animationDelay: '0.3s' }}>☁️</span>
+              <span className="text-5xl animate-float" style={{ animationDelay: '0.1s' }}>☁️</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Flying paper emoji */}
+      {orderAnimationStage === 'flying' && (
+        <div 
+          className="fixed left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all"
+          style={{ 
+            bottom: `${paperPosition.bottom}px`,
+            opacity: paperPosition.opacity,
+          }}
+        >
+          <span className="text-4xl">📄</span>
+        </div>
+      )}
     </div>
   );
 }

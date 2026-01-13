@@ -38,7 +38,7 @@ export function AnimatedPopup({ show, onClose, children, className = '' }) {
 }
 
 // Bottom sheet popup with slide animation
-export function AnimatedBottomSheet({ show, onClose, children, maxHeight = '30vh' }) {
+export function AnimatedBottomSheet({ show, onClose, children, maxHeight = '50vh' }) {
   const [shouldRender, setShouldRender] = useState(show);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -62,8 +62,8 @@ export function AnimatedBottomSheet({ show, onClose, children, maxHeight = '30vh
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div 
-        className={`absolute bottom-0 left-0 right-0 bg-[--card] rounded-t-3xl p-6 pb-8 border-t border-[--border] transition-transform duration-300 ease-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
-        style={{ maxHeight }}
+        className={`absolute bottom-0 left-0 right-0 bg-[--card] rounded-t-3xl p-6 border-t border-[--border] transition-transform duration-300 ease-out ${isAnimating ? 'translate-y-0' : 'translate-y-full'}`}
+        style={{ maxHeight, paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 2rem))' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-10 h-1 bg-[--border] rounded-full mx-auto mb-5" />

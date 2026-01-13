@@ -8,7 +8,7 @@ import { useAdminAuth } from "@/lib/useAdminAuth";
 export default function QRCodesPage() {
   const { isAuthenticated, loading: authLoading } = useAdminAuth();
   const tables = useQuery(api.tables.list);
-  const [baseUrl, setBaseUrl] = useState("http://localhost:3001");
+  const [baseUrl, setBaseUrl] = useState("https://bts-club-one.vercel.app/");
   const [showSettings, setShowSettings] = useState(false);
 
   const getQRCodeUrl = (tableNumber) => {
