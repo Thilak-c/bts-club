@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
+import { useBranding } from '@/lib/useBranding';
 
 export default function StaffLoginPage() {
   const router = useRouter();
+  const { brandName, isLoading: brandingLoading } = useBranding();
   const staff = useQuery(api.staff.listActive);
   const setOnline = useMutation(api.staff.setOnline);
   const [name, setName] = useState('');
@@ -41,6 +43,14 @@ export default function StaffLoginPage() {
     }
   };
 
+  if (brandingLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-zinc-800 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 font-mono">
       <div className="w-full max-w-xs">
@@ -49,7 +59,7 @@ export default function StaffLoginPage() {
             👤
           </div>
           <h1 className="text-lg font-bold text-white tracking-tight">STAFF LOGIN</h1>
-          <p className="text-zinc-600 text-[10px] uppercase tracking-widest mt-0.5">BTS DISC</p>
+          <p className="text-zinc-600 text-[10px] uppercase tracking-widest mt-0.5">{brandName}</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-3">

@@ -2,16 +2,27 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 const ADMIN_ID = "admin";
 const ADMIN_PASS = "admin123";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const settings = useQuery(api.settings.getAll);
+  const logoUrl = useQuery(
+    api.files.getUrl,
+    settings?.brandLogoStorageId ? { storageId: settings.brandLogoStorageId } : "skip"
+  );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const brandName = settings?.brandName || "BTS DISC";
+  const brandLogo = logoUrl || settings?.brandLogo || "/logo.png";
+  const brandingLoading = settings === undefined;
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -28,13 +39,26 @@ export default function AdminLoginPage() {
     }, 500);
   };
 
+  if (brandingLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-zinc-800 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 font-mono">
       <div className="w-full max-w-xs">
         <div className="bg-zinc-900 border border-zinc-800 p-6">
           <div className="text-center mb-6">
-            <h1 className="text-lg font-bold text-white tracking-tight">BTS DISC</h1>
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Admin Login</p>
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <img src={brandLogo} alt={brandName} className="h-10 w-10 rounded-full object-contain" />
+              <div className="text-left">
+                <h1 className="text-lg font-bold text-white tracking-tight">{brandName}</h1>
+                <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Admin Login</p>
+              </div>
+            </div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">

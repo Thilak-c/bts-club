@@ -3,6 +3,7 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAdminAuth } from "@/lib/useAdminAuth";
+import { clearCache, CACHE_KEYS } from "@/lib/useCache";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
 import MenuItemImage from "@/components/MenuItemImage";
 
@@ -68,6 +69,13 @@ export default function AdminMenuPage() {
     } else {
       await createItem({ name: formData.name, price: parseFloat(formData.price), category: formData.category, image: formData.image, description: formData.description, allowedZones: formData.allowedZones.length > 0 ? formData.allowedZones : [] });
     }
+    
+    // Clear menu cache for all zones
+    zones?.forEach(zone => {
+      clearCache(`${CACHE_KEYS.MENU_ITEMS}_${zone._id}`);
+    });
+    clearCache(CACHE_KEYS.MENU_ITEMS);
+    
     resetForm();
   };
 
@@ -80,7 +88,16 @@ export default function AdminMenuPage() {
 
   const toggleZone = (zoneId) => setFormData((prev) => ({ ...prev, allowedZones: prev.allowedZones.includes(zoneId) ? prev.allowedZones.filter((id) => id !== zoneId) : [...prev.allowedZones, zoneId] }));
   const selectAllZones = () => setFormData((prev) => ({ ...prev, allowedZones: [] }));
-  const handleDelete = async (id) => { if (confirm("Delete this item?")) await removeItem({ id }); };
+  const handleDelete = async (id) => { 
+    if (confirm("Delete this item?")) {
+      await removeItem({ id });
+      // Clear menu cache
+      zones?.forEach(zone => {
+        clearCache(`${CACHE_KEYS.MENU_ITEMS}_${zone._id}`);
+      });
+      clearCache(CACHE_KEYS.MENU_ITEMS);
+    }
+  };
   const resetForm = () => { setFormData({ name: "", price: "", category: "Mains", image: "", description: "", allowedZones: [] }); setEditingItem(null); setShowForm(false); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; };
 
   const totalItems = items?.length || 0;

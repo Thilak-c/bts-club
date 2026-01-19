@@ -2,6 +2,7 @@
 import { useRef, useEffect, useState } from "react";
 import { X, Send } from "lucide-react";
 import { useChat } from "@/lib/chat";
+import { useBranding } from "@/lib/useBranding";
 import ChatMessage from "./ChatMessage";
 import QuickReplyButtons from "./QuickReplyButtons";
 
@@ -14,6 +15,7 @@ export default function ChatSheet() {
     sendMessage,
     closeChat,
   } = useChat();
+  const { brandName } = useBranding();
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const [shouldRender, setShouldRender] = useState(isOpen);
@@ -64,7 +66,7 @@ export default function ChatSheet() {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[--border]">
           <div>
-            <h2 className="font-semibold text-[--text-primary]">BTS DISC Assistant</h2>
+            <h2 className="font-semibold text-[--text-primary]">{brandName} Assistant</h2>
             {tableContext && (
               <p className="text-xs text-[--muted]">
                 Table {tableContext.tableNumber}

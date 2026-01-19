@@ -17,6 +17,7 @@ import type * as menuItems from "../menuItems.js";
 import type * as orders from "../orders.js";
 import type * as reports from "../reports.js";
 import type * as reservations from "../reservations.js";
+import type * as settings from "../settings.js";
 import type * as staff from "../staff.js";
 import type * as staffCalls from "../staffCalls.js";
 import type * as staffNotifications from "../staffNotifications.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   orders: typeof orders;
   reports: typeof reports;
   reservations: typeof reservations;
+  settings: typeof settings;
   staff: typeof staff;
   staffCalls: typeof staffCalls;
   staffNotifications: typeof staffNotifications;

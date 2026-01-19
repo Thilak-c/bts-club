@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useBranding } from "@/lib/useBranding";
+import { useCachedQuery, CACHE_KEYS, CACHE_DURATIONS } from "@/lib/useCache";
 import { ArrowLeft, Check, Users } from "lucide-react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -114,6 +116,7 @@ const TableCard = ({ table, isSelected, onSelect, capacity }) => {
 
 export default function BookTablePage() {
   const router = useRouter();
+  const { brandName, brandLogo, isLoading: brandingLoading } = useBranding();
   const [step, setStep] = useState(1);
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedTables, setSelectedTables] = useState([]); // For multi-table booking
@@ -145,7 +148,17 @@ export default function BookTablePage() {
   const DEPOSIT_PER_PERSON = 200;
 
   const dates = generateDates();
-  const tables = useQuery(api.tables.list);
+  
+  // Use cached query for tables
+  const { data: tables, isLoading: tablesLoading } = useCachedQuery(
+    api.tables.list,
+    {},
+    CACHE_KEYS.TABLES,
+    {
+      cacheDuration: CACHE_DURATIONS.LONG,
+    }
+  );
+  
   const createReservation = useMutation(api.reservations.create);
   const reservations = useQuery(api.reservations.list, { date: selectedDate });
 
@@ -171,9 +184,9 @@ export default function BookTablePage() {
       key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_yourkeyhere",
       amount: totalDeposit * 100, // Amount in paise
       currency: "INR",
-      name: "BTS DISC",
+      name: brandName,
       description: `Table Reservation Deposit - ${formatDate(selectedDate)}`,
-      image: "/logo.png",
+      image: brandLogo,
       handler: async function (response) {
         // Payment successful - create reservation
         try {
@@ -286,8 +299,8 @@ export default function BookTablePage() {
       <div className="min-h-screen flex flex-col">
         <div className="p-5 flex items-center justify-center opacity-0 animate-slide-down" style={{animationDelay: '0.1s', animationFillMode: 'forwards'}}>
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="BTS DISC" className="h-9 w-9 rounded-full object-contain" />
-            <span className="text-[--text-dim] text-xs tracking-[0.15em] uppercase">BTS DISC</span>
+            <img src={brandLogo} alt={brandName} className="h-9 w-9 rounded-full object-contain" />
+            <span className="text-[--text-dim] text-xs tracking-[0.15em] uppercase">{brandName}</span>
           </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-8 pb-24">
@@ -325,6 +338,15 @@ export default function BookTablePage() {
     );
   }
 
+  // Show loading while branding loads
+  if (brandingLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[--bg]">
+        <div className="w-12 h-12 border-2 border-[--border] border-t-[--primary] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Razorpay Script */}
@@ -335,7 +357,7 @@ export default function BookTablePage() {
           <ArrowLeft size={20} className="text-[--text-muted]" />
         </button>
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="BTS DISC" className="h-8 w-8 rounded-full object-contain" />
+          <img src={brandLogo} alt={brandName} className="h-8 w-8 rounded-full object-contain" />
           <span className="text-[--text-dim] text-xs tracking-[0.15em] uppercase">Book</span>
         </div>
         <div className="w-8" />

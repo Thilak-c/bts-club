@@ -160,6 +160,195 @@ body {
   50% { background-position: 100% 50%; }
 }
 
+@keyframes scan {
+  0% { top: 0; }
+  50% { top: 100%; }
+  100% { top: 0; }
+}
+
+@keyframes bounce-crazy {
+  0% { transform: scale(0) rotate(0deg); }
+  50% { transform: scale(1.3) rotate(180deg); }
+  70% { transform: scale(0.9) rotate(360deg); }
+  100% { transform: scale(1) rotate(360deg); }
+}
+
+@keyframes number-slide-in {
+  0% { 
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  100% { 
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes spring-in {
+  0% { 
+    transform: scale(0.9) translateY(20px);
+    opacity: 0;
+  }
+  50% { 
+    transform: scale(1.02) translateY(-2px);
+  }
+  100% { 
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes number-spring {
+  0% { 
+    transform: scale(0.9) translateY(10px);
+    opacity: 0;
+  }
+  60% { 
+    transform: scale(1.05) translateY(-2px);
+  }
+  100% { 
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scale-bounce {
+  0% { 
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% { 
+    transform: scale(1.1);
+  }
+  100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-slide-up {
+  0% { 
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  100% { 
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes float-particle {
+  0%, 100% { 
+    transform: translateY(0) translateX(0);
+    opacity: 0.3;
+  }
+  50% { 
+    transform: translateY(-20px) translateX(10px);
+    opacity: 0.6;
+  }
+}
+
+@keyframes burst {
+  0% { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+@keyframes glitch {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes draw-check {
+  0% { stroke-dasharray: 0, 100; }
+  100% { stroke-dasharray: 100, 0; }
+}
+
+@keyframes loading-bar {
+  0% { width: 0%; background-position: 0% 50%; }
+  100% { width: 100%; background-position: 200% 50%; }
+}
+
+@keyframes pulse-crazy {
+  0%, 100% { transform: scale(1); opacity: 0.1; }
+  50% { transform: scale(1.5); opacity: 0.3; }
+}
+
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spin-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes sparkle {
+  0%, 100% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.5); opacity: 1; }
+}
+
+@keyframes float-emoji {
+  0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
+}
+
+@keyframes particle-explode-0 {
+  to { transform: translate(150px, -150px); opacity: 0; }
+}
+
+@keyframes particle-explode-1 {
+  to { transform: translate(200px, 0px); opacity: 0; }
+}
+
+@keyframes particle-explode-2 {
+  to { transform: translate(150px, 150px); opacity: 0; }
+}
+
+@keyframes particle-explode-3 {
+  to { transform: translate(0px, 200px); opacity: 0; }
+}
+
+@keyframes particle-explode-4 {
+  to { transform: translate(-150px, 150px); opacity: 0; }
+}
+
+@keyframes particle-explode-5 {
+  to { transform: translate(-200px, 0px); opacity: 0; }
+}
+
+@keyframes particle-explode-6 {
+  to { transform: translate(-150px, -150px); opacity: 0; }
+}
+
+@keyframes particle-explode-7 {
+  to { transform: translate(0px, -200px); opacity: 0; }
+}
+
+@keyframes speed-line {
+  0% { 
+    transform: translateY(0) scaleY(0);
+    opacity: 0;
+  }
+  50% { 
+    opacity: 0.5;
+  }
+  100% { 
+    transform: translateY(-100%) scaleY(2);
+    opacity: 0;
+  }
+}
+
 /* Animation classes */
 .animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-slide-down { animation: slide-down 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -175,6 +364,13 @@ body {
 .animate-pulse-soft { animation: pulse-soft 2.5s ease-in-out infinite; }
 .animate-expand { animation: expand 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-glow { animation: glow-pulse 3s ease-in-out infinite; }
+.animate-scan { animation: scan 2s ease-in-out infinite; }
+.animate-number-slide-in { animation: number-slide-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-spring-in { animation: spring-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-number-spring { animation: number-spring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-scale-bounce { animation: scale-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-fade-slide-up { animation: fade-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-float-particle { animation: float-particle 3s ease-in-out infinite; }
 
 /* Stagger children */
 .stagger-children > * { opacity: 0; animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -647,4 +843,61 @@ input::placeholder, textarea::placeholder {
   height: 10px;
   pointer-events: none;
   z-index: 9999;
+}
+
+/* ============================================
+   QR SCANNER STYLING - Premium camera view
+   ============================================ */
+
+/* Style the html5-qrcode container */
+#qr-reader {
+  border: none !important;
+  border-radius: 32px !important;
+  overflow: hidden !important;
+}
+
+/* Style the video element */
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 32px !important;
+}
+
+/* Hide the default scanning region overlay */
+#qr-reader__scan_region {
+  border: none !important;
+}
+
+/* Hide the default dashboard/controls */
+#qr-reader__dashboard {
+  display: none !important;
+}
+
+/* Hide the default camera selection */
+#qr-reader__camera_selection {
+  display: none !important;
+}
+
+/* Style the canvas overlay if present */
+#qr-reader canvas {
+  display: none !important;
+}
+
+/* Smooth scanning line animation */
+@keyframes scan-smooth {
+  0% { 
+    top: 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% { 
+    top: 100%;
+    opacity: 0;
+  }
 }

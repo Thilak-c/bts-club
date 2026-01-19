@@ -7,7 +7,7 @@ import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useAdminAuth } from '@/lib/useAdminAuth';
 import { useNotificationAlert } from '@/lib/useNotificationAlert';
-import { LayoutDashboard, ClipboardList, UtensilsCrossed, Grid3X3, Calendar, MapPin, QrCode, BarChart3, Users, ChevronDown, Check, ArrowLeft, LogOut } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, UtensilsCrossed, Grid3X3, Calendar, MapPin, QrCode, BarChart3, Users, ChevronDown, Check, ArrowLeft, LogOut, Settings } from 'lucide-react';
 
 const navItems = [
   { href: '/admin', label: 'DASHBOARD', icon: LayoutDashboard },
@@ -18,6 +18,7 @@ const navItems = [
   { href: '/admin/zones', label: 'ZONES', icon: MapPin },
   { href: '/admin/qr-codes', label: 'QR CODES', icon: QrCode },
   { href: '/admin/reports', label: 'REPORTS', icon: BarChart3 },
+  { href: '/admin/settings', label: 'SETTINGS', icon: Settings },
 ];
 
 export default function AdminLayout({ children }) {
@@ -27,6 +28,15 @@ export default function AdminLayout({ children }) {
   const staff = useQuery(api.staff.listActive);
   const pendingCalls = useQuery(api.staffCalls.listPending);
   const orders = useQuery(api.orders.list);
+  const settings = useQuery(api.settings.getAll);
+  const logoUrl = useQuery(
+    api.files.getUrl,
+    settings?.brandLogoStorageId ? { storageId: settings.brandLogoStorageId } : "skip"
+  );
+
+  // Get branding from settings
+  const brandName = settings?.brandName || "BTS DISC";
+  const brandLogo = logoUrl || settings?.brandLogo || "/logo.png";
 
   // Get pending/new orders
   const pendingOrders = orders?.filter(o => o.status === 'pending') || [];
@@ -62,8 +72,13 @@ export default function AdminLayout({ children }) {
       {/* Sidebar */}
       <aside className="w-56 bg-zinc-900 border-r border-zinc-800 min-h-screen p-4 flex flex-col">
         <div className="mb-6 pb-4 border-b border-zinc-800">
-          <h1 className="text-sm font-bold text-white tracking-tight">BTS DISC</h1>
-          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Admin Panel</p>
+          <div className="flex items-center gap-3 mb-2">
+            <img src={brandLogo} alt={brandName} className="h-8 w-8 rounded-full object-contain" />
+            <div>
+              <h1 className="text-sm font-bold text-white tracking-tight">{brandName}</h1>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Admin Panel</p>
+            </div>
+          </div>
         </div>
 
         {/* Live Activity Section */}

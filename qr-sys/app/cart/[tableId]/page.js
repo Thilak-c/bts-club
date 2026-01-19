@@ -8,6 +8,7 @@ import { api } from "@/convex/_generated/api";
 import { useSession } from "@/lib/session";
 import { useCart } from "@/lib/cart";
 import { useTable } from "@/lib/table";
+import { useBranding } from "@/lib/useBranding";
 import { checkLocationPermission, RESTAURANT_LOCATION } from "@/lib/location";
 import { 
   Trash2, Plus, Minus, CreditCard, Banknote, 
@@ -86,6 +87,7 @@ export default function CartPage() {
   const router = useRouter();
   const { sessionId } = useSession();
   const { setTable } = useTable();
+  const { brandName, brandLogo, isLoading: brandingLoading } = useBranding();
   const { 
     cart, updateQuantity, removeFromCart, cartTotal, clearCart, cartCount,
     updateItemNote, updateCustomizations, saveForLater, savedItems, moveToCart, removeFromSaved
@@ -693,6 +695,15 @@ export default function CartPage() {
             <ChevronRight size={18} />
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  // Show loading while branding loads
+  if (brandingLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[--bg]">
+        <div className="w-12 h-12 border-2 border-[--border] border-t-[--primary] rounded-full animate-spin" />
       </div>
     );
   }

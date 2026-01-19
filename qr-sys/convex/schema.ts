@@ -154,4 +154,10 @@ export default defineSchema({
     createdAt: v.number(),
     lastVisit: v.optional(v.number()),
   }).index("by_phone", ["phone"]),
+
+  // App settings (brand name, logo, etc.)
+  settings: defineTable({
+    key: v.string(), // 'brandName', 'brandLogo'
+    value: v.string(),
+  }).index("by_key", ["key"]),
 });

@@ -6,6 +6,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCart } from "@/lib/cart";
 import { useTable } from "@/lib/table";
+import { useBranding } from "@/lib/useBranding";
+import { useCachedQuery, CACHE_KEYS, CACHE_DURATIONS } from "@/lib/useCache";
 import { 
   ShoppingBag, Plus, Minus, ArrowLeft, Armchair, 
   UtensilsCrossed, Search, X, Phone, Lock, GlassWater
@@ -36,6 +38,7 @@ export default function MenuPage() {
   const { tableId } = useParams();
   const router = useRouter();
   const { setTable } = useTable();
+  const { brandName, brandLogo, isLoading: brandingLoading } = useBranding();
   const [activeCategory, setActiveCategory] = useState("All");
   const [dismissedReservation, setDismissedReservation] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -56,7 +59,18 @@ export default function MenuPage() {
   const [showWaterPopup, setShowWaterPopup] = useState(false);
 
   const table = useQuery(api.tables.getByNumber, { number: parseInt(tableId) });
-  const menuItems = useQuery(api.menuItems.listForZone, table !== undefined ? { zoneId: table?.zoneId } : "skip");
+  
+  // Use cached query for menu items with image preloading
+  const { data: menuItems, isLoading: menuLoading } = useCachedQuery(
+    api.menuItems.listForZone,
+    table !== undefined ? { zoneId: table?.zoneId } : "skip",
+    table?.zoneId ? `${CACHE_KEYS.MENU_ITEMS}_${table.zoneId}` : null,
+    {
+      cacheDuration: CACHE_DURATIONS.MEDIUM,
+      preloadImageKey: 'image',
+    }
+  );
+  
   const reservation = useQuery(api.reservations.getCurrentForTable, { tableNumber: parseInt(tableId) });
   const createNotification = useMutation(api.staffNotifications.create);
   const createStaffCall = useMutation(api.staffCalls.create);
@@ -365,7 +379,16 @@ export default function MenuPage() {
   }
 
   // Loading state
-  if (!menuItems) {
+  // Show loading while branding loads
+  if (brandingLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[--bg]">
+        <div className="w-12 h-12 border-2 border-[--border] border-t-[--primary] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!menuItems || menuLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

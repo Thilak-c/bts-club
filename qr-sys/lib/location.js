@@ -24,6 +24,19 @@ export function getDistance(lat1, lon1, lat2, lon2) {
 
 // Check if user is within restaurant radius
 export function checkLocationPermission() {
+  // LOCATION VERIFICATION DISABLED
+  return new Promise((resolve) => {
+    resolve({
+      allowed: true,
+      distance: 0,
+      accuracy: 0,
+      userLat: RESTAURANT_LOCATION.lat,
+      userLng: RESTAURANT_LOCATION.lng,
+      requiredRadius: RESTAURANT_LOCATION.radius,
+    });
+  });
+
+  /* ORIGINAL CODE - COMMENTED OUT
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject({ code: "NOT_SUPPORTED", message: "Geolocation not supported" });
@@ -71,4 +84,5 @@ export function checkLocationPermission() {
       }
     );
   });
+  */
 }

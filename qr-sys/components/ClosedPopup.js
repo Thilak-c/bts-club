@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Clock } from 'lucide-react';
 import Link from 'next/link';
+import { useBranding } from '@/lib/useBranding';
 
 // Business hours: 12 PM (12:00) to 11 PM (23:00)
 const OPEN_HOUR = 12;  // 12 PM
@@ -15,6 +16,7 @@ export function isRestaurantOpen() {
 }
 
 export function ClosedPopup({ tableId }) {
+  const { brandName, brandLogo, isLoading: brandingLoading } = useBranding();
   const [dismissed, setDismissed] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
 
@@ -31,6 +33,15 @@ export function ClosedPopup({ tableId }) {
     setDismissed(true);
     sessionStorage.setItem('closed-popup-dismissed', 'true');
   };
+
+  // Show loading while branding loads
+  if (brandingLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[--bg]">
+        <div className="w-12 h-12 border-2 border-[--border] border-t-[--primary] rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   // Don't show if open or dismissed
   if (isOpen || dismissed) return null;
@@ -52,8 +63,8 @@ export function ClosedPopup({ tableId }) {
       {/* Header */}
       <div className="p-5 flex items-center justify-between opacity-0 animate-slide-down" style={{animationDelay: '0.1s', animationFillMode: 'forwards'}}>
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="BTS DISC" className="h-9 w-9 rounded-full object-contain" />
-          <span className="text-[--text-dim] text-xs tracking-[0.15em] uppercase">BTS DISC</span>
+          <img src={brandLogo} alt={brandName} className="h-9 w-9 rounded-full object-contain" />
+          <span className="text-[--text-dim] text-xs tracking-[0.15em] uppercase">{brandName}</span>
         </div>
         {tableId && (
           <span className="text-[--text-dim] text-xs flex items-center gap-2">
